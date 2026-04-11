@@ -220,7 +220,7 @@ class _ConsolePanelState extends State<ConsolePanel> {
       final result = await Process.run('powershell', [
         '-NoProfile', '-Command',
         r'$val = (Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" '
-        r'-Name "ScreenFilterPro" -ErrorAction SilentlyContinue)."ScreenFilterPro"; '
+        r'-Name "ScreenFilter" -ErrorAction SilentlyContinue)."ScreenFilter"; '
         r'if ($val) { Write-Output "1" } else { Write-Output "0" }'
       ]);
       if (mounted) {
@@ -250,13 +250,13 @@ class _ConsolePanelState extends State<ConsolePanel> {
         await Process.run('powershell', [
           '-NoProfile', '-Command',
           'Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" '
-          '-Name "ScreenFilterPro" -Value \'$exePath\''
+          '-Name "ScreenFilter" -Value \'$exePath\''
         ]);
       } else {
         await Process.run('powershell', [
           '-NoProfile', '-Command',
           'Remove-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" '
-          '-Name "ScreenFilterPro" -ErrorAction SilentlyContinue'
+          '-Name "ScreenFilter" -ErrorAction SilentlyContinue'
         ]);
       }
     } catch (_) {
@@ -482,7 +482,7 @@ class _ConsolePanelState extends State<ConsolePanel> {
           ),
           const SizedBox(height: 16),
           const Text(
-            'ScreenFilter Pro',
+            'ScreenFilter',
             style: TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.w800,
@@ -1975,7 +1975,7 @@ class _ConsolePanelState extends State<ConsolePanel> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('ScreenFilter Pro', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1A1D26))),
+                    const Text('ScreenFilter', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1A1D26))),
                     const SizedBox(height: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -2046,8 +2046,8 @@ class _ConsolePanelState extends State<ConsolePanel> {
                   iconBg: const Color(0xFF1A1D26),
                   iconColor: Colors.white,
                   label: 'GitHub 仓库',
-                  subtitle: 'github.com/deceive777xv/ScreenFilterPro',
-                  onTap: () => _launchUrl('https://github.com/deceive777xv/ScreenFilterPro'),
+                  subtitle: 'github.com/deceive777xv/ScreenFilter',
+                  onTap: () => _launchUrl('https://github.com/deceive777xv/ScreenFilter'),
                 ),
                 const SizedBox(height: 12),
                 const Divider(color: Color(0xFFEEEFF2), height: 1),
@@ -2058,7 +2058,7 @@ class _ConsolePanelState extends State<ConsolePanel> {
                   iconColor: const Color(0xFFEF4444),
                   label: '反馈问题',
                   subtitle: '在 GitHub Issues 提交 Bug 或建议',
-                  onTap: () => _launchUrl('https://github.com/deceive777xv/ScreenFilterPro/issues'),
+                  onTap: () => _launchUrl('https://github.com/deceive777xv/ScreenFilter/issues'),
                 ),
               ],
             ),
@@ -2090,7 +2090,7 @@ class _ConsolePanelState extends State<ConsolePanel> {
           // 版权信息
           const Center(
             child: Text(
-              '© 2026 ScreenFilter Pro. All rights reserved.',
+              '© 2026 ScreenFilter. All rights reserved.',
               style: TextStyle(fontSize: 11, color: Color(0xFFD1D5DB)),
             ),
           ),
