@@ -52,7 +52,7 @@ float4 main(PS_INPUT input) : SV_TARGET {
         float size  = 0.004 + hash1(fi * 2.31) * 0.006;
         float col_x = hash1(fi * 1.93);
         float offset= hash1(fi * 5.17);
-        float y     = frac(offset - u_Time * speed);
+        float y     = frac(offset + u_Time * speed);
         float drift = sin(u_Time * 0.35 + fi * 0.83) * 0.018;
         float2 sp   = float2(col_x + drift, y);
         float2 d    = uv - sp;

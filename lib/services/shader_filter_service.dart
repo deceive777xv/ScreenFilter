@@ -159,6 +159,7 @@ class ShaderFilterService {
 
     // Dynamic — continuous rendering.
     if (!_stopwatch.isRunning) _stopwatch.start();
+    _renderFilterFrame(); // render first frame immediately
     _startFilterTimer();
   }
 

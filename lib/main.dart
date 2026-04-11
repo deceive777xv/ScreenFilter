@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:system_tray/system_tray.dart';
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, exit;
 import 'dart:ui' as ui;
 import 'ui/console_panel.dart';
 import 'ui/overlays/clock_overlay.dart';
@@ -169,6 +169,11 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   }
 
   void _onSandboxModeChanged() {
+    // 沙盒/特效激活时，若当前 alpha 为 0（清除状态），自动提升到 1.0 以确保可见
+    if (_shaderFilterService.mode != FilterApplyMode.none && _alpha == 0.0) {
+      _alpha = 1.0;
+      _settings.setAlpha(_alpha);
+    }
     setState(() {});
   }
 
@@ -201,9 +206,24 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
         toolTip: '滤镜 - 点击打开设置',
       );
 
+      // 右键菜单
+      final Menu menu = Menu();
+      await menu.buildFrom([
+        MenuItemLabel(label: '显示/隐藏面板', onClicked: (menuItem) => _togglePanel()),
+        MenuSeparator(),
+        MenuItemLabel(label: '退出', onClicked: (menuItem) {
+          _shaderFilterService.dispose();
+          _systemTray.destroy();
+          exit(0);
+        }),
+      ]);
+      await _systemTray.setContextMenu(menu);
+
       _systemTray.registerSystemTrayEventHandler((eventName) {
-        if (eventName == kSystemTrayEventClick || eventName == kSystemTrayEventRightClick) {
+        if (eventName == kSystemTrayEventClick) {
           _togglePanel();
+        } else if (eventName == kSystemTrayEventRightClick) {
+          _systemTray.popUpContextMenu();
         }
       });
     } catch (e) {
@@ -488,28 +508,21 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   Widget _buildShaderFilter() {
     if (_shader == null) return const SizedBox();
 
+    final sandboxActive = _shaderFilterService.mode != FilterApplyMode.none;
+    // 当沙盒/特效激活时，GLSL层全透明无需渲染，直接跳过以避免干扰DX11叠加层
+    if (sandboxActive) return const SizedBox();
+
     return Builder(builder: (context) {
       final size = MediaQuery.of(context).size;
-      final sandboxActive = _shaderFilterService.mode != FilterApplyMode.none;
 
       _shader!.setFloat(0, size.width);
       _shader!.setFloat(1, size.height);
-
-      if (sandboxActive) {
-        _shader!.setFloat(2, 0);
-        _shader!.setFloat(3, 0);
-        _shader!.setFloat(4, 0);
-        _shader!.setFloat(5, 0);
-        _shader!.setFloat(6, 0);
-        _shader!.setFloat(7, 0);
-      } else {
-        _shader!.setFloat(2, _brightness);
-        _shader!.setFloat(3, _alpha);
-        _shader!.setFloat(4, _baseColor.r);
-        _shader!.setFloat(5, _baseColor.g);
-        _shader!.setFloat(6, _baseColor.b);
-        _shader!.setFloat(7, _baseColor.a);
-      }
+      _shader!.setFloat(2, _brightness);
+      _shader!.setFloat(3, _alpha);
+      _shader!.setFloat(4, _baseColor.r);
+      _shader!.setFloat(5, _baseColor.g);
+      _shader!.setFloat(6, _baseColor.b);
+      _shader!.setFloat(7, _baseColor.a);
 
       return CustomPaint(
         size: Size.infinite,
