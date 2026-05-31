@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
+import '../models/advanced_config.dart';
 import 'dx11_shader_ffi.dart';
 
 // Win32 GetCursorPos via FFI for global mouse position.
@@ -30,9 +31,19 @@ enum FilterApplyMode { none, static, dynamic }
 /// open/close cycles.  The sandbox page borrows this service for
 /// preview rendering and shader compilation.
 class ShaderFilterService {
-  final DX11ShaderEngine _engine = DX11ShaderEngine();
+  ShaderFilterService({DX11ShaderEngine? engine})
+      : _engine = engine ?? DX11ShaderEngine();
+
+  final DX11ShaderEngine _engine;
   bool _engineReady = false;
   bool _shaderCompiled = false;
+  bool _nativeOverlayActive = false;
+  double? _lastFullscreenTime;
+  double? _lastFullscreenMouseX;
+  double? _lastFullscreenMouseY;
+  Color? _lastFullscreenAccentColor;
+  RegionMaskConfig _regionMaskConfig = RegionMaskConfig();
+  String? _lastRegionMaskSignature;
 
   /// Output image for the fullscreen filter overlay.
   final ValueNotifier<ui.Image?> filterImageNotifier = ValueNotifier(null);
@@ -45,13 +56,25 @@ class ShaderFilterService {
   Color _accentColor = const Color(0xFFFF8040);
   Size _screenSize = Size.zero;
   double _dpr = 1.0;
+  double _filterOpacity = 1.0;
+  double _filterBrightness = 0.0;
 
   // ── Getters ──────────────────────────────────────────────────
   bool get isEngineReady => _engineReady;
   bool get isShaderCompiled => _shaderCompiled;
   FilterApplyMode get mode => _mode;
   Size get screenSize => _screenSize;
+  Size get filterRenderSize {
+    if (_screenSize == Size.zero) return Size.zero;
+    return Size(
+      _toPhysicalPixels(_screenSize.width).toDouble(),
+      _toPhysicalPixels(_screenSize.height).toDouble(),
+    );
+  }
   Color get accentColor => _accentColor;
+  double get filterOpacity => _filterOpacity;
+  double get filterBrightness => _filterBrightness;
+  bool get isNativeOverlayActive => _nativeOverlayActive && _engine.isOverlayActive;
 
   /// Notifies listeners when filter mode changes (for mutual exclusion).
   final ValueNotifier<FilterApplyMode> modeNotifier = ValueNotifier(FilterApplyMode.none);
@@ -62,12 +85,20 @@ class ShaderFilterService {
     if (_engineReady) return;
     if (_engine.load()) {
       _engineReady = _engine.initialize();
+      if (_engineReady) {
+        _engine.setFilterVisuals(
+          opacity: _filterOpacity,
+          brightness: _filterBrightness,
+        );
+        _syncRegionMaskToEngine();
+      }
     }
   }
 
   void dispose() {
     _filterTimer?.cancel();
     _stopwatch.stop();
+    _engine.hideOverlay();
     _engine.dispose();
   }
 
@@ -98,25 +129,56 @@ class ShaderFilterService {
     required Color accentColor,
   }) {
     if (!_engineReady || !_shaderCompiled) return null;
-    _engine.setUniforms(
+    _setUniforms(
       time: time,
-      resolutionX: width.toDouble(),
-      resolutionY: height.toDouble(),
+      width: width,
+      height: height,
       mouseX: mouseX,
       mouseY: mouseY,
-      accentR: accentColor.r,
-      accentG: accentColor.g,
-      accentB: accentColor.b,
-      accentA: accentColor.a,
+      accentColor: accentColor,
     );
     return _engine.renderFrame(width, height);
   }
 
   // ── Fullscreen filter ────────────────────────────────────────
 
-  void updateScreenSize(Size s) => _screenSize = s;
+  void updateScreenSize(Size s) {
+    if (_screenSize == s) return;
+    _screenSize = s;
+    _syncRegionMaskToEngine();
+  }
+
   void updateAccentColor(Color c) => _accentColor = c;
-  void updateDevicePixelRatio(double dpr) => _dpr = dpr;
+
+  void updateDevicePixelRatio(double dpr) {
+    final nextDpr = dpr > 0 ? dpr : 1.0;
+    if (_dpr == nextDpr) return;
+    _dpr = nextDpr;
+    _syncRegionMaskToEngine();
+  }
+
+  void updateRegionMask(RegionMaskConfig config) {
+    _regionMaskConfig = config;
+    _syncRegionMaskToEngine();
+  }
+
+  void updateFilterVisuals({required double opacity, required double brightness}) {
+    final nextOpacity = opacity.clamp(0.0, 1.0);
+    final nextBrightness = brightness.clamp(-1.0, 1.0);
+    if (nextOpacity == _filterOpacity && nextBrightness == _filterBrightness) {
+      return;
+    }
+    _filterOpacity = nextOpacity;
+    _filterBrightness = nextBrightness;
+    if (_engineReady) {
+      _engine.setFilterVisuals(
+        opacity: _filterOpacity,
+        brightness: _filterBrightness,
+      );
+      _syncRegionMaskToEngine();
+      _redrawNativeOverlayWithLastFrame();
+    }
+  }
 
   /// Read global mouse position, normalized to 0..1 based on screen size.
   Offset getGlobalMouseNormalized() {
@@ -124,13 +186,12 @@ class ShaderFilterService {
     try {
       _getCursorPos(pt);
       if (_screenSize == Size.zero) return const Offset(0.5, 0.5);
-      // GetCursorPos returns physical screen coordinates; normalize using
-      // physical size (logical × devicePixelRatio) so DPI-scaled displays work.
-      final physW = _screenSize.width * _dpr;
-      final physH = _screenSize.height * _dpr;
+      // GetCursorPos returns physical screen coordinates, so normalize against
+      // the same physical render size used by the fullscreen shader image.
+      final renderSize = filterRenderSize;
       return Offset(
-        (pt.ref.x / physW).clamp(0.0, 1.0),
-        (pt.ref.y / physH).clamp(0.0, 1.0),
+        (pt.ref.x / renderSize.width).clamp(0.0, 1.0),
+        (pt.ref.y / renderSize.height).clamp(0.0, 1.0),
       );
     } finally {
       calloc.free(pt);
@@ -141,13 +202,21 @@ class ShaderFilterService {
   void applyFilter(FilterApplyMode newMode, Size screenSize, Color accentColor) {
     _mode = newMode;
     _screenSize = screenSize;
-    _accentColor = accentColor;    modeNotifier.value = newMode;
+    _accentColor = accentColor;
+    modeNotifier.value = newMode;
     _filterTimer?.cancel();
     _filterTimer = null;
 
     if (newMode == FilterApplyMode.none) {
       filterImageNotifier.value = null;
+      _nativeOverlayActive = false;
+      _engine.hideOverlay();
       return;
+    }
+
+    _nativeOverlayActive = _tryStartNativeOverlay();
+    if (_nativeOverlayActive) {
+      filterImageNotifier.value = null;
     }
 
     if (newMode == FilterApplyMode.static) {
@@ -169,6 +238,8 @@ class ShaderFilterService {
     _filterTimer?.cancel();
     _filterTimer = null;
     filterImageNotifier.value = null;
+    _nativeOverlayActive = false;
+    _engine.hideOverlay();
     modeNotifier.value = FilterApplyMode.none;
   }
 
@@ -201,26 +272,185 @@ class ShaderFilterService {
     if (_screenSize == Size.zero) return;
 
     final time = _stopwatch.elapsedMilliseconds / 1000.0;
-    final w = _screenSize.width.toInt();
-    final h = _screenSize.height.toInt();
     final mouse = getGlobalMouseNormalized();
 
-    _engine.setUniforms(
+    renderFullscreenFilterFrame(
       time: time,
-      resolutionX: _screenSize.width,
-      resolutionY: _screenSize.height,
       mouseX: mouse.dx,
       mouseY: mouse.dy,
-      accentR: _accentColor.r,
-      accentG: _accentColor.g,
-      accentB: _accentColor.b,
-      accentA: _accentColor.a,
+      accentColor: _accentColor,
     );
+  }
+
+  void renderFullscreenFilterFrame({
+    required double time,
+    required double mouseX,
+    required double mouseY,
+    required Color accentColor,
+  }) {
+    if (!_engineReady || !_shaderCompiled) return;
+    if (_screenSize == Size.zero) return;
+
+    final renderSize = filterRenderSize;
+    final w = renderSize.width.toInt();
+    final h = renderSize.height.toInt();
+    _lastFullscreenTime = time;
+    _lastFullscreenMouseX = mouseX;
+    _lastFullscreenMouseY = mouseY;
+    _lastFullscreenAccentColor = accentColor;
+
+    _setUniforms(
+      time: time,
+      width: w,
+      height: h,
+      mouseX: mouseX,
+      mouseY: mouseY,
+      accentColor: accentColor,
+    );
+
+    if (_nativeOverlayActive) {
+      if (_engine.renderOverlayFrame(w, h)) {
+        filterImageNotifier.value = null;
+        return;
+      }
+      _nativeOverlayActive = false;
+      _engine.hideOverlay();
+    }
 
     final pixels = _engine.renderFrame(w, h);
     if (pixels != null) {
       _decodePixels(pixels, w, h);
     }
+  }
+
+  bool _tryStartNativeOverlay() {
+    if (!_engineReady || !_shaderCompiled) return false;
+    final renderSize = filterRenderSize;
+    if (renderSize == Size.zero) return false;
+    _engine.setFilterVisuals(
+      opacity: _filterOpacity,
+      brightness: _filterBrightness,
+    );
+    _syncRegionMaskToEngine();
+    return _engine.showOverlay(
+      renderSize.width.toInt(),
+      renderSize.height.toInt(),
+    );
+  }
+
+  void _syncRegionMaskToEngine() {
+    if (!_engineReady) return;
+    final renderSize = filterRenderSize;
+    if (renderSize == Size.zero) return;
+
+    final enabled = _regionMaskConfig.enabled;
+    final inverted = enabled && _regionMaskConfig.inverted;
+    final activeRegions = enabled
+        ? _regionMaskConfig.regions
+            .where((region) => region.enabled && region.points.length >= 3)
+            .toList()
+        : const <MaskRegion>[];
+    final points = <double>[];
+    final regionPointCounts = <int>[];
+
+    for (final region in activeRegions) {
+      regionPointCounts.add(region.points.length);
+      for (final point in region.points) {
+        points.add(point.dx * _dpr);
+        points.add(point.dy * _dpr);
+      }
+    }
+
+    final signature = _regionMaskSignature(
+      enabled: enabled,
+      inverted: inverted,
+      width: renderSize.width.toInt(),
+      height: renderSize.height.toInt(),
+      points: points,
+      regionPointCounts: regionPointCounts,
+    );
+    if (signature == _lastRegionMaskSignature) return;
+
+    if (_engine.setRegionMask(
+      enabled: enabled,
+      inverted: inverted,
+      width: renderSize.width.toInt(),
+      height: renderSize.height.toInt(),
+      points: points,
+      regionPointCounts: regionPointCounts,
+    )) {
+      _lastRegionMaskSignature = signature;
+      _redrawNativeOverlayWithLastFrame();
+    }
+  }
+
+  String _regionMaskSignature({
+    required bool enabled,
+    required bool inverted,
+    required int width,
+    required int height,
+    required List<double> points,
+    required List<int> regionPointCounts,
+  }) {
+    final pointText = points.map((point) => point.toStringAsFixed(2)).join(',');
+    final countText = regionPointCounts.join(',');
+    return '$enabled|$inverted|$width|$height|$countText|$pointText';
+  }
+
+  void _redrawNativeOverlayWithLastFrame() {
+    if (!_nativeOverlayActive) return;
+    final time = _lastFullscreenTime;
+    final mouseX = _lastFullscreenMouseX;
+    final mouseY = _lastFullscreenMouseY;
+    final accentColor = _lastFullscreenAccentColor;
+    if (time == null || mouseX == null || mouseY == null || accentColor == null) {
+      return;
+    }
+
+    final renderSize = filterRenderSize;
+    if (renderSize == Size.zero) return;
+    final w = renderSize.width.toInt();
+    final h = renderSize.height.toInt();
+
+    _setUniforms(
+      time: time,
+      width: w,
+      height: h,
+      mouseX: mouseX,
+      mouseY: mouseY,
+      accentColor: accentColor,
+    );
+
+    if (!_engine.renderOverlayFrame(w, h)) {
+      _nativeOverlayActive = false;
+      _engine.hideOverlay();
+    }
+  }
+
+  void _setUniforms({
+    required double time,
+    required int width,
+    required int height,
+    required double mouseX,
+    required double mouseY,
+    required Color accentColor,
+  }) {
+    _engine.setUniforms(
+      time: time,
+      resolutionX: width.toDouble(),
+      resolutionY: height.toDouble(),
+      mouseX: mouseX,
+      mouseY: mouseY,
+      accentR: accentColor.r,
+      accentG: accentColor.g,
+      accentB: accentColor.b,
+      accentA: accentColor.a,
+    );
+  }
+
+  int _toPhysicalPixels(double logicalPixels) {
+    final pixels = (logicalPixels * _dpr).round();
+    return pixels < 1 ? 1 : pixels;
   }
 
   Future<void> _decodePixels(Uint8List pixels, int w, int h) async {
@@ -231,7 +461,7 @@ class ShaderFilterService {
     );
     final image = await completer.future;
     // Guard against stale async decode completing after stopFilter().
-    if (_mode != FilterApplyMode.none) {
+    if (_mode != FilterApplyMode.none && !_nativeOverlayActive) {
       filterImageNotifier.value = image;
     }
   }

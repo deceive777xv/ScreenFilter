@@ -15,6 +15,7 @@ target_include_directories(dx11_shader_engine PUBLIC
 target_link_libraries(dx11_shader_engine PRIVATE
     d3d11
     d3dcompiler
+    dcomp
     dxgi
 )
 

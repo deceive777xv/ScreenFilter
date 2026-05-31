@@ -58,6 +58,42 @@ SHADER_API int32_t engine_render_frame(int32_t width, int32_t height);
 /// @return 0 on success, non-zero on failure.
 SHADER_API int32_t engine_get_frame_pixels(uint8_t* out_pixels, int32_t buffer_size);
 
+/// Show the native GPU overlay window and prepare it for rendering.
+/// @param width   Overlay render width in physical pixels.
+/// @param height  Overlay render height in physical pixels.
+/// @return 0 on success, non-zero on failure.
+SHADER_API int32_t engine_show_overlay(int32_t width, int32_t height);
+
+/// Render the current shader directly into the native GPU overlay.
+/// @param width   Overlay render width in physical pixels.
+/// @param height  Overlay render height in physical pixels.
+/// @return 0 on success, non-zero on failure.
+SHADER_API int32_t engine_render_overlay_frame(int32_t width, int32_t height);
+
+/// Update global fullscreen visual controls applied by the overlay compositor.
+/// @param opacity    Overall filter opacity, clamped to 0..1.
+/// @param brightness Brightness adjustment, clamped to -1..1.
+SHADER_API void engine_set_filter_visuals(float opacity, float brightness);
+
+/// Hide and release native overlay resources.
+SHADER_API void engine_hide_overlay();
+
+/// Returns 1 when the native overlay window is active, otherwise 0.
+SHADER_API int32_t engine_is_overlay_active();
+
+/// Upload a polygon mask for native overlay composition.
+/// Points are flattened physical-pixel xy pairs. Each region count is a number
+/// of points, not float values.
+SHADER_API int32_t engine_set_region_mask(
+    int32_t enabled,
+    int32_t inverted,
+    int32_t width,
+    int32_t height,
+    const float* points,
+    const int32_t* region_point_counts,
+    int32_t region_count
+);
+
 /// Release all DirectX resources.
 SHADER_API void engine_shutdown();
 

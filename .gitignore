@@ -22,7 +22,9 @@ ios/
 linux/
 macos/
 web/
-test/
+test/*
+!test/
+!test/shader_filter_service_test.dart
 img_temp/
 script.ps1
 

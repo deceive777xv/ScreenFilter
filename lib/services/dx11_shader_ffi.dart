@@ -33,6 +33,38 @@ typedef _EngineGetFramePixelsC = Int32 Function(
 typedef _EngineGetFramePixelsDart = int Function(
     Pointer<Uint8> outPixels, int bufferSize);
 
+typedef _EngineShowOverlayC = Int32 Function(Int32 width, Int32 height);
+typedef _EngineShowOverlayDart = int Function(int width, int height);
+
+typedef _EngineRenderOverlayFrameC = Int32 Function(Int32 width, Int32 height);
+typedef _EngineRenderOverlayFrameDart = int Function(int width, int height);
+
+typedef _EngineSetFilterVisualsC = Void Function(Float opacity, Float brightness);
+typedef _EngineSetFilterVisualsDart = void Function(double opacity, double brightness);
+
+typedef _EngineHideOverlayC = Void Function();
+typedef _EngineHideOverlayDart = void Function();
+
+typedef _EngineIsOverlayActiveC = Int32 Function();
+typedef _EngineIsOverlayActiveDart = int Function();
+
+typedef _EngineSetRegionMaskC = Int32 Function(
+    Int32 enabled,
+    Int32 inverted,
+    Int32 width,
+    Int32 height,
+    Pointer<Float> points,
+    Pointer<Int32> regionPointCounts,
+    Int32 regionCount);
+typedef _EngineSetRegionMaskDart = int Function(
+    int enabled,
+    int inverted,
+    int width,
+    int height,
+    Pointer<Float> points,
+    Pointer<Int32> regionPointCounts,
+    int regionCount);
+
 typedef _EngineShutdownC = Void Function();
 typedef _EngineShutdownDart = void Function();
 
@@ -56,6 +88,12 @@ class DX11ShaderEngine {
   late final _EngineSetUniformsDart _setUniforms;
   late final _EngineRenderFrameDart _renderFrame;
   late final _EngineGetFramePixelsDart _getFramePixels;
+  late final _EngineShowOverlayDart _showOverlay;
+  late final _EngineRenderOverlayFrameDart _renderOverlayFrame;
+  late final _EngineSetFilterVisualsDart _setFilterVisuals;
+  late final _EngineHideOverlayDart _hideOverlay;
+  late final _EngineIsOverlayActiveDart _isOverlayActive;
+  late final _EngineSetRegionMaskDart _setRegionMask;
   late final _EngineShutdownDart _shutdown;
 
   bool get isInitialized => _initialized;
@@ -71,6 +109,12 @@ class DX11ShaderEngine {
       _setUniforms = _lib.lookupFunction<_EngineSetUniformsC, _EngineSetUniformsDart>('engine_set_uniforms');
       _renderFrame = _lib.lookupFunction<_EngineRenderFrameC, _EngineRenderFrameDart>('engine_render_frame');
       _getFramePixels = _lib.lookupFunction<_EngineGetFramePixelsC, _EngineGetFramePixelsDart>('engine_get_frame_pixels');
+      _showOverlay = _lib.lookupFunction<_EngineShowOverlayC, _EngineShowOverlayDart>('engine_show_overlay');
+      _renderOverlayFrame = _lib.lookupFunction<_EngineRenderOverlayFrameC, _EngineRenderOverlayFrameDart>('engine_render_overlay_frame');
+      _setFilterVisuals = _lib.lookupFunction<_EngineSetFilterVisualsC, _EngineSetFilterVisualsDart>('engine_set_filter_visuals');
+      _hideOverlay = _lib.lookupFunction<_EngineHideOverlayC, _EngineHideOverlayDart>('engine_hide_overlay');
+      _isOverlayActive = _lib.lookupFunction<_EngineIsOverlayActiveC, _EngineIsOverlayActiveDart>('engine_is_overlay_active');
+      _setRegionMask = _lib.lookupFunction<_EngineSetRegionMaskC, _EngineSetRegionMaskDart>('engine_set_region_mask');
       _shutdown = _lib.lookupFunction<_EngineShutdownC, _EngineShutdownDart>('engine_shutdown');
 
       return true;
@@ -156,9 +200,72 @@ class DX11ShaderEngine {
     }
   }
 
+  bool showOverlay(int width, int height) {
+    if (!_initialized) return false;
+    return _showOverlay(width, height) == 0;
+  }
+
+  bool renderOverlayFrame(int width, int height) {
+    if (!_initialized) return false;
+    return _renderOverlayFrame(width, height) == 0;
+  }
+
+  void setFilterVisuals({
+    required double opacity,
+    required double brightness,
+  }) {
+    if (!_initialized) return;
+    _setFilterVisuals(opacity, brightness);
+  }
+
+  void hideOverlay() {
+    if (!_initialized) return;
+    _hideOverlay();
+  }
+
+  bool get isOverlayActive {
+    if (!_initialized) return false;
+    return _isOverlayActive() != 0;
+  }
+
+  bool setRegionMask({
+    required bool enabled,
+    required bool inverted,
+    required int width,
+    required int height,
+    required List<double> points,
+    required List<int> regionPointCounts,
+  }) {
+    if (!_initialized) return false;
+    final pointPtr = calloc<Float>(points.length);
+    final countPtr = calloc<Int32>(regionPointCounts.length);
+    try {
+      for (var i = 0; i < points.length; i++) {
+        pointPtr[i] = points[i];
+      }
+      for (var i = 0; i < regionPointCounts.length; i++) {
+        countPtr[i] = regionPointCounts[i];
+      }
+      return _setRegionMask(
+            enabled ? 1 : 0,
+            inverted ? 1 : 0,
+            width,
+            height,
+            pointPtr,
+            countPtr,
+            regionPointCounts.length,
+          ) ==
+          0;
+    } finally {
+      calloc.free(pointPtr);
+      calloc.free(countPtr);
+    }
+  }
+
   /// Shutdown and release all DX11 resources.
   void dispose() {
     if (_initialized) {
+      _hideOverlay();
       _shutdown();
       _initialized = false;
     }

@@ -823,6 +823,7 @@ class _AdvancedPageState extends State<AdvancedPage> {
         themeMode: widget.settingsService.getThemeMode(),
         focusMode: _focus,
         spotlight: _spotlight,
+        regionMask: _regionMask,
         automationRules: _rules,
       );
 
@@ -876,15 +877,18 @@ class _AdvancedPageState extends State<AdvancedPage> {
       setState(() {
         _focus = config.focusMode;
         _spotlight = config.spotlight;
+        _regionMask = config.regionMask;
         _rules = config.automationRules;
       });
       widget.onFocusModeChanged(_focus);
       widget.onSpotlightChanged(_spotlight);
+      widget.onRegionMaskChanged(_regionMask);
       widget.onAutomationRulesChanged(_rules);
 
       // Save advanced settings
       await widget.settingsService.setFocusModeConfig(_focus);
       await widget.settingsService.setSpotlightConfig(_spotlight);
+      await widget.settingsService.setRegionMaskConfig(_regionMask);
       await widget.settingsService.setAutomationRules(_rules);
 
       widget.onConfigImported?.call(config);

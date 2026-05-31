@@ -173,6 +173,10 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     if (_shaderFilterService.mode != FilterApplyMode.none && _alpha == 0.0) {
       _alpha = 1.0;
       _settings.setAlpha(_alpha);
+      _shaderFilterService.updateFilterVisuals(
+        opacity: _alpha,
+        brightness: _brightness,
+      );
     }
     setState(() {});
   }
@@ -261,6 +265,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   void _onRegionMaskChanged(RegionMaskConfig config) {
     setState(() => _regionMaskConfig = config);
     _settings.setRegionMaskConfig(config);
+    _shaderFilterService.updateRegionMask(config);
   }
 
   void _startDrawingRegion() {
@@ -283,6 +288,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       _isPanelOpen = true;
     });
     _settings.setRegionMaskConfig(_regionMaskConfig);
+    _shaderFilterService.updateRegionMask(_regionMaskConfig);
   }
 
   void _onDrawingCancel() {
@@ -365,6 +371,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       _regionMaskConfig = config.regionMask;
       _automationRules = config.automationRules;
     });
+    _shaderFilterService.updateRegionMask(_regionMaskConfig);
   }
 
   // ── Build ─────────────────────────────────────────────────────
@@ -373,6 +380,10 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   Widget build(BuildContext context) {
     _shaderFilterService.updateScreenSize(MediaQuery.of(context).size);
     _shaderFilterService.updateDevicePixelRatio(MediaQuery.of(context).devicePixelRatio);
+    _shaderFilterService.updateFilterVisuals(
+      opacity: _alpha,
+      brightness: _brightness,
+    );
     final dpr = MediaQuery.of(context).devicePixelRatio;
 
     return Scaffold(
@@ -557,10 +568,18 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       onBrightnessChanged: (v) {
         setState(() => _brightness = v);
         _settings.setBrightness(v);
+        _shaderFilterService.updateFilterVisuals(
+          opacity: _alpha,
+          brightness: _brightness,
+        );
       },
       onAlphaChanged: (v) {
         setState(() => _alpha = v);
         _settings.setAlpha(v);
+        _shaderFilterService.updateFilterVisuals(
+          opacity: _alpha,
+          brightness: _brightness,
+        );
       },
       onBaseColorChanged: (c) {
         setState(() => _baseColor = c);

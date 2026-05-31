@@ -173,7 +173,9 @@ class _ConsolePanelState extends State<ConsolePanel> {
       return;
     }
     _clearActivePreset();
-    final screenSize = MediaQuery.of(context).size;
+    final media = MediaQuery.of(context);
+    final screenSize = media.size;
+    svc.updateDevicePixelRatio(media.devicePixelRatio);
     svc.applyFilter(FilterApplyMode.dynamic, screenSize, svc.accentColor);
     setState(() {
       _effectLoading = false;

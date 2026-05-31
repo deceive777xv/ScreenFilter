@@ -124,8 +124,20 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     final screenSize = _service.screenSize;
     if (screenSize == Size.zero) return;
 
-    final w = screenSize.width.toInt();
-    final h = screenSize.height.toInt();
+    if (_service.isNativeOverlayActive) {
+      final mouse = _service.getGlobalMouseNormalized();
+      _service.renderFullscreenFilterFrame(
+        time: _elapsedTime,
+        mouseX: mouse.dx,
+        mouseY: mouse.dy,
+        accentColor: _accentColor,
+      );
+      return;
+    }
+
+    final renderSize = _service.filterRenderSize;
+    final w = renderSize.width.toInt();
+    final h = renderSize.height.toInt();
     final mouse = _service.getGlobalMouseNormalized();
     final pixels = _service.renderFrame(
       width: w,
@@ -198,8 +210,10 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
   // ── Filter apply ──────────────────────────────────────────────
 
   void _applyFilter(FilterApplyMode mode) {
-    final screenSize = MediaQuery.of(context).size;
+    final media = MediaQuery.of(context);
+    final screenSize = media.size;
     _service.updateScreenSize(screenSize);
+    _service.updateDevicePixelRatio(media.devicePixelRatio);
     _service.updateAccentColor(_accentColor);
 
     setState(() => _filterMode = mode);
@@ -213,9 +227,10 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
       // Render one frame at screen res and freeze.
       _service.applyFilter(FilterApplyMode.static, screenSize, _accentColor);
       // Also do a local render so the notifier gets a screen-res image.
-      if (_compileSuccess) {
-        final w = screenSize.width.toInt();
-        final h = screenSize.height.toInt();
+      if (_compileSuccess && !_service.isNativeOverlayActive) {
+        final renderSize = _service.filterRenderSize;
+        final w = renderSize.width.toInt();
+        final h = renderSize.height.toInt();
         final pixels = _service.renderFrame(
           width: w,
           height: h,
