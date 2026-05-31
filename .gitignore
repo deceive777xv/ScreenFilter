@@ -25,6 +25,7 @@ web/
 test/*
 !test/
 !test/shader_filter_service_test.dart
+!test/tray_menu_layout_test.dart
 img_temp/
 script.ps1
 

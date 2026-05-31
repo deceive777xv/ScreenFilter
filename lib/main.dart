@@ -17,6 +17,7 @@ import 'models/advanced_config.dart';
 import 'models/filter_preset.dart';
 import 'services/settings_service.dart';
 import 'services/shader_filter_service.dart';
+import 'services/tray_menu_layout.dart';
 import 'services/win32_helpers.dart';
 
 void main() async {
@@ -115,6 +116,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   ui.FragmentShader? _shader;
 
   final SystemTray _systemTray = SystemTray();
+  bool _systemTrayReady = false;
 
   // 沙盒自定义滤镜
   late final ShaderFilterService _shaderFilterService;
@@ -133,6 +135,9 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   Timer? _automationTimer;
   String? _lastMatchedPreset;
   bool _isDrawingRegion = false;
+  Color? _lastTrayBaseColor;
+  double? _lastTrayAlpha;
+  double? _lastTrayBrightness;
 
   SettingsService get _settings => widget.settingsService;
 
@@ -156,13 +161,13 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     _automationRules = _settings.getAutomationRules();
     _automationEnabled = _settings.getAutomationEnabled();
 
-    initSystemTray();
-    _loadShader();
-
     // Init shader filter service
     _shaderFilterService = ShaderFilterService();
     _shaderFilterService.init();
     _shaderFilterService.modeNotifier.addListener(_onSandboxModeChanged);
+
+    initSystemTray();
+    _loadShader();
 
     // Start automation if enabled
     if (_automationEnabled) _startAutomation();
@@ -179,6 +184,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       );
     }
     setState(() {});
+    unawaited(_refreshTrayMenu());
   }
 
   @override
@@ -210,24 +216,14 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
         toolTip: '滤镜 - 点击打开设置',
       );
 
-      // 右键菜单
-      final Menu menu = Menu();
-      await menu.buildFrom([
-        MenuItemLabel(label: '显示/隐藏面板', onClicked: (menuItem) => _togglePanel()),
-        MenuSeparator(),
-        MenuItemLabel(label: '退出', onClicked: (menuItem) {
-          _shaderFilterService.dispose();
-          _systemTray.destroy();
-          exit(0);
-        }),
-      ]);
-      await _systemTray.setContextMenu(menu);
+      await _setTrayContextMenu();
+      _systemTrayReady = true;
 
-      _systemTray.registerSystemTrayEventHandler((eventName) {
+      _systemTray.registerSystemTrayEventHandler((eventName) async {
         if (eventName == kSystemTrayEventClick) {
           _togglePanel();
         } else if (eventName == kSystemTrayEventRightClick) {
-          _systemTray.popUpContextMenu();
+          await _showTrayMenu();
         }
       });
     } catch (e) {
@@ -243,6 +239,180 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       setState(() => _isPanelOpen = true);
       await windowManager.setIgnoreMouseEvents(false);
     }
+    unawaited(_refreshTrayMenu());
+  }
+
+  bool get _baseFilterEnabled => _alpha.abs() > 0.001 || _brightness.abs() > 0.001;
+  bool get _filterEnabled =>
+      _baseFilterEnabled || _shaderFilterService.mode != FilterApplyMode.none;
+
+  TrayMenuState get _trayMenuState => TrayMenuState(
+        panelOpen: _isPanelOpen,
+        filterEnabled: _filterEnabled,
+        spotlightEnabled: _spotlightConfig.enabled,
+      );
+
+  Future<void> _showTrayMenu() async {
+    await _setTrayContextMenu();
+    await _systemTray.popUpContextMenu();
+  }
+
+  Future<void> _refreshTrayMenu() async {
+    if (!_systemTrayReady) return;
+    await _setTrayContextMenu();
+  }
+
+  Future<void> _setTrayContextMenu() async {
+    try {
+      final menu = Menu();
+      await menu.buildFrom(_buildNativeTrayMenuItems(
+        buildTrayMenuEntries(_trayMenuState),
+      ));
+      await _systemTray.setContextMenu(menu);
+    } catch (e) {
+      debugPrint('Tray Menu Error: $e');
+    }
+  }
+
+  List<MenuItemBase> _buildNativeTrayMenuItems(List<TrayMenuEntry> entries) {
+    return entries.map((entry) {
+      switch (entry.kind) {
+        case TrayMenuEntryKind.item:
+          return MenuItemLabel(
+            label: entry.label,
+            onClicked: (_) => _handleTrayAction(entry.action),
+          );
+        case TrayMenuEntryKind.checkbox:
+          return MenuItemCheckbox(
+            label: entry.label,
+            checked: entry.checked,
+            onClicked: (_) => _handleTrayAction(entry.action),
+          );
+        case TrayMenuEntryKind.separator:
+          return MenuSeparator();
+        case TrayMenuEntryKind.submenu:
+          return SubMenu(
+            label: entry.label,
+            children: _buildNativeTrayMenuItems(entry.children),
+          );
+      }
+    }).toList();
+  }
+
+  void _handleTrayAction(TrayMenuAction? action) {
+    switch (action) {
+      case TrayMenuAction.togglePanel:
+        _togglePanel();
+        break;
+      case TrayMenuAction.toggleFilter:
+        _toggleTrayFilter();
+        break;
+      case TrayMenuAction.toggleSpotlight:
+        _toggleTraySpotlight();
+        break;
+      case TrayMenuAction.applyEyeCarePreset:
+        _applyPresetByName('护眼');
+        break;
+      case TrayMenuAction.applyNightPreset:
+        _applyPresetByName('夜间');
+        break;
+      case TrayMenuAction.clearFilter:
+        _clearTrayFilter(rememberCurrent: true);
+        break;
+      case TrayMenuAction.exit:
+        _exitFromTray();
+        break;
+      case TrayMenuAction.presets:
+      case null:
+        break;
+    }
+    unawaited(_refreshTrayMenu());
+  }
+
+  void _toggleTrayFilter() {
+    if (_filterEnabled) {
+      _clearTrayFilter(rememberCurrent: true);
+      return;
+    }
+
+    if (_lastTrayAlpha != null && _lastTrayAlpha!.abs() > 0.001) {
+      _applyBasicFilterValues(
+        baseColor: _lastTrayBaseColor ?? const Color(0xFFFFB300),
+        alpha: _lastTrayAlpha!,
+        brightness: _lastTrayBrightness ?? 0.0,
+        activePreset: null,
+      );
+    } else {
+      _applyPresetByName('护眼');
+    }
+  }
+
+  void _toggleTraySpotlight() {
+    final nextEnabled = !_spotlightConfig.enabled;
+    setState(() {
+      _spotlightConfig = _spotlightConfig.copyWith(enabled: nextEnabled);
+      if (nextEnabled && _focusModeConfig.enabled) {
+        _focusModeConfig = _focusModeConfig.copyWith(enabled: false);
+      }
+    });
+    _settings.setSpotlightConfig(_spotlightConfig);
+    if (nextEnabled) {
+      _settings.setFocusModeConfig(_focusModeConfig);
+    }
+  }
+
+  void _clearTrayFilter({required bool rememberCurrent}) {
+    if (rememberCurrent && _shaderFilterService.mode == FilterApplyMode.none) {
+      _rememberCurrentBaseFilter();
+    }
+    if (_shaderFilterService.mode != FilterApplyMode.none) {
+      _shaderFilterService.stopFilter();
+    }
+    _applyBasicFilterValues(
+      baseColor: Colors.transparent,
+      alpha: 0.0,
+      brightness: 0.0,
+      activePreset: null,
+      stopShaderFilter: false,
+    );
+  }
+
+  void _rememberCurrentBaseFilter() {
+    if (!_baseFilterEnabled) return;
+    _lastTrayBaseColor = _baseColor;
+    _lastTrayAlpha = _alpha;
+    _lastTrayBrightness = _brightness;
+  }
+
+  void _applyBasicFilterValues({
+    required Color baseColor,
+    required double alpha,
+    required double brightness,
+    required String? activePreset,
+    bool stopShaderFilter = true,
+  }) {
+    if (stopShaderFilter && _shaderFilterService.mode != FilterApplyMode.none) {
+      _shaderFilterService.stopFilter();
+    }
+    setState(() {
+      _baseColor = baseColor;
+      _alpha = alpha;
+      _brightness = brightness;
+    });
+    _settings.setBaseColor(baseColor);
+    _settings.setAlpha(alpha);
+    _settings.setBrightness(brightness);
+    _settings.setActivePreset(activePreset);
+    _shaderFilterService.updateFilterVisuals(
+      opacity: _alpha,
+      brightness: _brightness,
+    );
+  }
+
+  void _exitFromTray() {
+    _shaderFilterService.dispose();
+    _systemTray.destroy();
+    exit(0);
   }
 
   void _onOverlayChanged(OverlayComponent component) {
@@ -255,11 +425,13 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   void _onFocusModeChanged(FocusModeConfig config) {
     setState(() => _focusModeConfig = config);
     _settings.setFocusModeConfig(config);
+    unawaited(_refreshTrayMenu());
   }
 
   void _onSpotlightChanged(SpotlightConfig config) {
     setState(() => _spotlightConfig = config);
     _settings.setSpotlightConfig(config);
+    unawaited(_refreshTrayMenu());
   }
 
   void _onRegionMaskChanged(RegionMaskConfig config) {
@@ -274,6 +446,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       _isPanelOpen = false;
     });
     windowManager.setIgnoreMouseEvents(false);
+    unawaited(_refreshTrayMenu());
   }
 
   void _onDrawingComplete(List<Offset> polygon) {
@@ -289,6 +462,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     });
     _settings.setRegionMaskConfig(_regionMaskConfig);
     _shaderFilterService.updateRegionMask(_regionMaskConfig);
+    unawaited(_refreshTrayMenu());
   }
 
   void _onDrawingCancel() {
@@ -296,6 +470,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       _isDrawingRegion = false;
       _isPanelOpen = true;
     });
+    unawaited(_refreshTrayMenu());
   }
 
   void _onAutomationRulesChanged(List<AutomationRule> rules) {
@@ -349,15 +524,16 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   void _applyPresetByName(String name) {
     final match = kBasicFilterPresets.where((p) => p.name == name).firstOrNull;
     if (match == null) return;
-    setState(() {
-      _baseColor = match.baseColor;
-      _alpha = match.alpha;
-      _brightness = match.brightness;
-    });
-    _settings.setBrightness(match.brightness);
-    _settings.setAlpha(match.alpha);
-    _settings.setBaseColor(match.baseColor);
-    _settings.setActivePreset(name);
+    _applyBasicFilterValues(
+      baseColor: match.baseColor,
+      alpha: match.alpha,
+      brightness: match.brightness,
+      activePreset: name,
+    );
+    if (match.alpha.abs() > 0.001 || match.brightness.abs() > 0.001) {
+      _rememberCurrentBaseFilter();
+    }
+    unawaited(_refreshTrayMenu());
   }
 
   void _onConfigImported(AppConfig config) {
@@ -372,6 +548,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       _automationRules = config.automationRules;
     });
     _shaderFilterService.updateRegionMask(_regionMaskConfig);
+    unawaited(_refreshTrayMenu());
   }
 
   // ── Build ─────────────────────────────────────────────────────
@@ -572,6 +749,8 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
           opacity: _alpha,
           brightness: _brightness,
         );
+        _rememberCurrentBaseFilter();
+        unawaited(_refreshTrayMenu());
       },
       onAlphaChanged: (v) {
         setState(() => _alpha = v);
@@ -580,6 +759,8 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
           opacity: _alpha,
           brightness: _brightness,
         );
+        _rememberCurrentBaseFilter();
+        unawaited(_refreshTrayMenu());
       },
       onBaseColorChanged: (c) {
         setState(() => _baseColor = c);
@@ -589,6 +770,8 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
         } else if (_shaderFilterService.filterImageNotifier.value != null) {
           _shaderFilterService.filterImageNotifier.value = null;
         }
+        _rememberCurrentBaseFilter();
+        unawaited(_refreshTrayMenu());
       },
       onClose: _togglePanel,
       onFontFamilyChanged: widget.onFontFamilyChanged,
