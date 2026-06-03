@@ -125,11 +125,7 @@ class _SpotlightPainter extends CustomPainter {
           const Color(0xFFFFFFFF),
           const Color(0x00FFFFFF),
         ],
-        [
-          0.0,
-          innerRadius / outerRadius,
-          1.0,
-        ],
+        [0.0, innerRadius / outerRadius, 1.0],
       );
     canvas.drawCircle(logicalMouse, outerRadius, spotPaint);
 

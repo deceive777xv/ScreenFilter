@@ -63,11 +63,7 @@ class _WheelPickerState extends State<WheelPicker> {
     //     vector.dx.abs() < squareRadio && vector.dy.abs() < squareRadio;
 
     if (isWheel) {
-      widget.onChanged(
-        color.withHue(
-          _Wheel.vectorToHue(vector),
-        ),
-      );
+      widget.onChanged(color.withHue(_Wheel.vectorToHue(vector)));
     }
     if (widget.showPalette && this.isPalette) {
       widget.onChanged(
@@ -96,11 +92,7 @@ class _WheelPickerState extends State<WheelPicker> {
     final Offset vector = offset - startPosition - center;
 
     if (isWheel) {
-      widget.onChanged(
-        color.withHue(
-          _Wheel.vectorToHue(vector),
-        ),
-      );
+      widget.onChanged(color.withHue(_Wheel.vectorToHue(vector)));
     }
     if (isPalette) {
       widget.onChanged(
@@ -143,10 +135,8 @@ class _WheelPickerState extends State<WheelPicker> {
 }
 
 class _WheelPainter extends CustomPainter {
-  const _WheelPainter({
-    required this.color,
-    required this.showColorBox,
-  }) : super();
+  const _WheelPainter({required this.color, required this.showColorBox})
+    : super();
 
   static double strokeWidth = 8;
   static double doubleStrokeWidth = 16;
@@ -177,9 +167,7 @@ class _WheelPainter extends CustomPainter {
         Color.fromARGB(255, 255, 0, 255),
         Color.fromARGB(255, 255, 0, 0),
       ],
-    ).createShader(
-      Rect.fromLTWH(0, 0, radio, radio),
-    );
+    ).createShader(Rect.fromLTWH(0, 0, radio, radio));
     canvas.drawCircle(
       center,
       radio,
@@ -214,24 +202,28 @@ class _WheelPainter extends CustomPainter {
       ..strokeWidth = 6
       ..style = PaintingStyle.stroke;
     final Offset wheel = _Wheel.hueToVector(
-        (color.hue + 360.0) * math.pi / 180.0, radio, center);
+      (color.hue + 360.0) * math.pi / 180.0,
+      radio,
+      center,
+    );
     canvas.drawCircle(wheel, 12, paintBlack);
     canvas.drawCircle(wheel, 12, paintWhite);
 
     if (!showColorBox) return;
 
     // Palette
-    final Rect rect = Rect.fromLTWH(center.dx - squareRadio,
-        center.dy - squareRadio, squareRadio * 2, squareRadio * 2);
-    final RRect rRect = RRect.fromRectAndRadius(
-      rect,
-      const Radius.circular(4),
+    final Rect rect = Rect.fromLTWH(
+      center.dx - squareRadio,
+      center.dy - squareRadio,
+      squareRadio * 2,
+      squareRadio * 2,
     );
+    final RRect rRect = RRect.fromRectAndRadius(rect, const Radius.circular(4));
 
     final Shader horizontal = LinearGradient(
       colors: <Color>[
         Colors.white,
-        HSVColor.fromAHSV(1.0, color.hue, 1.0, 1.0).toColor()
+        HSVColor.fromAHSV(1.0, color.hue, 1.0, 1.0).toColor(),
       ],
     ).createShader(rect);
     canvas.drawRRect(
@@ -261,10 +253,16 @@ class _WheelPainter extends CustomPainter {
     );
 
     // Thumb on color box
-    final double paletteX =
-        _Wheel.saturationToVector(color.saturation, squareRadio, center.dx);
-    final double paletteY =
-        _Wheel.valueToVector(color.value, squareRadio, center.dy);
+    final double paletteX = _Wheel.saturationToVector(
+      color.saturation,
+      squareRadio,
+      center.dx,
+    );
+    final double paletteY = _Wheel.valueToVector(
+      color.value,
+      squareRadio,
+      center.dy,
+    );
     final Offset paletteVector = Offset(paletteX, paletteY);
     canvas.drawCircle(paletteVector, 12, paintBlack);
     canvas.drawCircle(paletteVector, 12, paintWhite);
@@ -285,8 +283,10 @@ class _Wheel {
   static Offset hueToVector(double h, double radio, Offset center) =>
       Offset(math.cos(h) * radio + center.dx, math.sin(h) * radio + center.dy);
   static double saturationToVector(
-          double s, double squareRadio, double centerX) =>
-      (s - 0.5) * squareRadio / 0.5 + centerX;
+    double s,
+    double squareRadio,
+    double centerX,
+  ) => (s - 0.5) * squareRadio / 0.5 + centerX;
   static double valueToVector(double l, double squareRadio, double centerY) =>
       (0.5 - l) * squareRadio / 0.5 + centerY;
 }

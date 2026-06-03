@@ -74,8 +74,7 @@ class UniformControlsPanel extends StatelessWidget {
           _UniformRow(
             name: 'u_Resolution',
             type: 'float2',
-            value:
-                '${resolution.width.toInt()} × ${resolution.height.toInt()}',
+            value: '${resolution.width.toInt()} × ${resolution.height.toInt()}',
             color: const Color(0xFF89B4FA),
           ),
           const SizedBox(height: 6),
@@ -165,8 +164,9 @@ class UniformControlsPanel extends StatelessWidget {
       builder: (ctx) {
         return Dialog(
           backgroundColor: const Color(0xFF1E1E2E),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Container(
             width: 340,
             padding: const EdgeInsets.all(20),
@@ -177,8 +177,11 @@ class UniformControlsPanel extends StatelessWidget {
                 // Title
                 Row(
                   children: [
-                    const Icon(Icons.palette,
-                        size: 18, color: Color(0xFFF38BA8)),
+                    const Icon(
+                      Icons.palette,
+                      size: 18,
+                      color: Color(0xFFF38BA8),
+                    ),
                     const SizedBox(width: 8),
                     const Text(
                       'u_AccentColor',
@@ -190,8 +193,11 @@ class UniformControlsPanel extends StatelessWidget {
                     ),
                     const Spacer(),
                     IconButton(
-                      icon: const Icon(Icons.close,
-                          size: 18, color: Color(0xFF6C7086)),
+                      icon: const Icon(
+                        Icons.close,
+                        size: 18,
+                        color: Color(0xFF6C7086),
+                      ),
                       onPressed: () => Navigator.of(ctx).pop(),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),

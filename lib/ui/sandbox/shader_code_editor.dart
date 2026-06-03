@@ -76,7 +76,9 @@ class ShaderCodeEditorState extends State<ShaderCodeEditor> {
               color: const Color(0xFF1E1E2E),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: widget.errorMessage != null && widget.errorMessage!.isNotEmpty
+                color:
+                    widget.errorMessage != null &&
+                        widget.errorMessage!.isNotEmpty
                     ? const Color(0xFFEF4444)
                     : const Color(0xFF313244),
               ),
@@ -157,9 +159,7 @@ class ShaderCodeEditorState extends State<ShaderCodeEditor> {
           border: InputBorder.none,
           isCollapsed: true,
         ),
-        inputFormatters: [
-          _TabInputFormatter(),
-        ],
+        inputFormatters: [_TabInputFormatter()],
         onChanged: (text) {
           widget.onCodeChanged(text);
         },
@@ -219,17 +219,17 @@ class _HighlightController extends TextEditingController {
   }
 
   static final _keywordPattern = RegExp(
-    r'\b(?:if|else|for|while|do|switch|case|default|break|continue|return|discard|struct|cbuffer|register|typedef)\b'
+    r'\b(?:if|else|for|while|do|switch|case|default|break|continue|return|discard|struct|cbuffer|register|typedef)\b',
   );
   static final _typePattern = RegExp(
     r'\b(?:void|bool|int|uint|float|double|half|'
     r'float[1-4]|float[1-4]x[1-4]|int[1-4]|uint[1-4]|bool[1-4]|half[1-4]|'
     r'sampler|sampler2D|SamplerState|Texture2D|Texture3D|TextureCube|'
-    r'RWTexture2D|StructuredBuffer|RWStructuredBuffer)\b'
+    r'RWTexture2D|StructuredBuffer|RWStructuredBuffer)\b',
   );
   static final _semanticPattern = RegExp(
     r'\b(?:SV_POSITION|SV_TARGET[0-7]?|SV_VertexID|SV_InstanceID|SV_DispatchThreadID|'
-    r'TEXCOORD[0-9]?|COLOR[0-9]?|NORMAL|TANGENT|BINORMAL|POSITION[0-9]?)\b'
+    r'TEXCOORD[0-9]?|COLOR[0-9]?|NORMAL|TANGENT|BINORMAL|POSITION[0-9]?)\b',
   );
   static final _builtinFuncPattern = RegExp(
     r'\b(?:sin|cos|tan|asin|acos|atan|atan2|'
@@ -240,23 +240,23 @@ class _HighlightController extends TextEditingController {
     r'mul|transpose|determinant|'
     r'tex2D|tex2Dlod|tex2Dgrad|Sample|SampleLevel|Load|'
     r'ddx|ddy|fwidth|sign|trunc|rcp|'
-    r'all|any|clip|lit|noise)\b'
+    r'all|any|clip|lit|noise)\b',
   );
   static final _numberPattern = RegExp(
-    r'\b(?:0[xX][0-9a-fA-F]+|[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?[fFhHuUlL]?)\b'
+    r'\b(?:0[xX][0-9a-fA-F]+|[0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?[fFhHuUlL]?)\b',
   );
   static final _uniformPattern = RegExp(
-    r'\bu_(?:Time|Resolution|Mouse|AccentColor)\b'
+    r'\bu_(?:Time|Resolution|Mouse|AccentColor)\b',
   );
 
-  static const _colorKeyword  = Color(0xFFCBA6F7);
-  static const _colorType     = Color(0xFF89B4FA);
+  static const _colorKeyword = Color(0xFFCBA6F7);
+  static const _colorType = Color(0xFF89B4FA);
   static const _colorSemantic = Color(0xFFF9E2AF);
-  static const _colorBuiltin  = Color(0xFF94E2D5);
-  static const _colorNumber   = Color(0xFFFAB387);
-  static const _colorString   = Color(0xFFA6E3A1);
-  static const _colorComment  = Color(0xFF6C7086);
-  static const _colorUniform  = Color(0xFFF38BA8);
+  static const _colorBuiltin = Color(0xFF94E2D5);
+  static const _colorNumber = Color(0xFFFAB387);
+  static const _colorString = Color(0xFFA6E3A1);
+  static const _colorComment = Color(0xFF6C7086);
+  static const _colorUniform = Color(0xFFF38BA8);
 
   static List<TextSpan> _highlightHLSL(String code) {
     final List<TextSpan> spans = [];
@@ -267,7 +267,12 @@ class _HighlightController extends TextEditingController {
       if (i + 1 < code.length && code[i] == '/' && code[i + 1] == '/') {
         int end = code.indexOf('\n', i);
         if (end == -1) end = code.length;
-        spans.add(TextSpan(text: code.substring(i, end), style: const TextStyle(color: _colorComment)));
+        spans.add(
+          TextSpan(
+            text: code.substring(i, end),
+            style: const TextStyle(color: _colorComment),
+          ),
+        );
         i = end;
         continue;
       }
@@ -275,8 +280,17 @@ class _HighlightController extends TextEditingController {
       // Block comment
       if (i + 1 < code.length && code[i] == '/' && code[i + 1] == '*') {
         int end = code.indexOf('*/', i + 2);
-        if (end == -1) end = code.length; else end += 2;
-        spans.add(TextSpan(text: code.substring(i, end), style: const TextStyle(color: _colorComment)));
+        if (end == -1) {
+          end = code.length;
+        } else {
+          end += 2;
+        }
+        spans.add(
+          TextSpan(
+            text: code.substring(i, end),
+            style: const TextStyle(color: _colorComment),
+          ),
+        );
         i = end;
         continue;
       }
@@ -285,11 +299,20 @@ class _HighlightController extends TextEditingController {
       if (code[i] == '"') {
         int end = i + 1;
         while (end < code.length && code[end] != '"') {
-          if (code[end] == '\\') end++;
+          if (code[end] == '\\') {
+            end++;
+          }
           end++;
         }
-        if (end < code.length) end++;
-        spans.add(TextSpan(text: code.substring(i, end), style: const TextStyle(color: _colorString)));
+        if (end < code.length) {
+          end++;
+        }
+        spans.add(
+          TextSpan(
+            text: code.substring(i, end),
+            style: const TextStyle(color: _colorString),
+          ),
+        );
         i = end;
         continue;
       }
@@ -297,21 +320,59 @@ class _HighlightController extends TextEditingController {
       // Word token
       if (_isWordChar(code[i])) {
         int end = i;
-        while (end < code.length && _isWordCharOrDot(code[end])) end++;
+        while (end < code.length && _isWordCharOrDot(code[end])) {
+          end++;
+        }
         final word = code.substring(i, end);
 
         if (_uniformPattern.hasMatch(word)) {
-          spans.add(TextSpan(text: word, style: const TextStyle(color: _colorUniform, fontWeight: FontWeight.w600)));
+          spans.add(
+            TextSpan(
+              text: word,
+              style: const TextStyle(
+                color: _colorUniform,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          );
         } else if (_keywordPattern.hasMatch(word)) {
-          spans.add(TextSpan(text: word, style: const TextStyle(color: _colorKeyword, fontWeight: FontWeight.w600)));
+          spans.add(
+            TextSpan(
+              text: word,
+              style: const TextStyle(
+                color: _colorKeyword,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          );
         } else if (_typePattern.hasMatch(word)) {
-          spans.add(TextSpan(text: word, style: const TextStyle(color: _colorType)));
+          spans.add(
+            TextSpan(
+              text: word,
+              style: const TextStyle(color: _colorType),
+            ),
+          );
         } else if (_semanticPattern.hasMatch(word)) {
-          spans.add(TextSpan(text: word, style: const TextStyle(color: _colorSemantic)));
+          spans.add(
+            TextSpan(
+              text: word,
+              style: const TextStyle(color: _colorSemantic),
+            ),
+          );
         } else if (_builtinFuncPattern.hasMatch(word)) {
-          spans.add(TextSpan(text: word, style: const TextStyle(color: _colorBuiltin)));
+          spans.add(
+            TextSpan(
+              text: word,
+              style: const TextStyle(color: _colorBuiltin),
+            ),
+          );
         } else if (_numberPattern.hasMatch(word)) {
-          spans.add(TextSpan(text: word, style: const TextStyle(color: _colorNumber)));
+          spans.add(
+            TextSpan(
+              text: word,
+              style: const TextStyle(color: _colorNumber),
+            ),
+          );
         } else {
           spans.add(TextSpan(text: word));
         }
@@ -329,7 +390,10 @@ class _HighlightController extends TextEditingController {
 
   static bool _isWordChar(String ch) {
     final c = ch.codeUnitAt(0);
-    return (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || (c >= 48 && c <= 57) || c == 95;
+    return (c >= 65 && c <= 90) ||
+        (c >= 97 && c <= 122) ||
+        (c >= 48 && c <= 57) ||
+        c == 95;
   }
 
   static bool _isWordCharOrDot(String ch) {
@@ -346,8 +410,8 @@ class _TabInputFormatter extends TextInputFormatter {
   ) {
     if (newValue.text.contains('\t')) {
       final text = newValue.text.replaceAll('\t', '    ');
-      final offset = newValue.selection.baseOffset +
-          (text.length - newValue.text.length);
+      final offset =
+          newValue.selection.baseOffset + (text.length - newValue.text.length);
       return TextEditingValue(
         text: text,
         selection: TextSelection.collapsed(offset: offset),

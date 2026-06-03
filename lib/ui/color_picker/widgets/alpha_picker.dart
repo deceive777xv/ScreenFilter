@@ -5,11 +5,7 @@ import 'slider_title.dart';
 
 /// Slider for selecting the alpha value (0-255).
 class AlphaPicker extends StatefulWidget {
-  const AlphaPicker({
-    required this.alpha,
-    required this.onChanged,
-    super.key,
-  });
+  const AlphaPicker({required this.alpha, required this.onChanged, super.key});
 
   final int alpha;
   final ValueChanged<int> onChanged;
@@ -34,10 +30,8 @@ class _AlphaPickerState extends State<AlphaPicker> {
           value: widget.alpha.toDouble(),
           max: 255.0,
           onChanged: valueOnChanged,
-          child: CustomPaint(
-            painter: _AlphaTrackPainter(),
-          ),
-        )
+          child: CustomPaint(painter: _AlphaTrackPainter()),
+        ),
       ],
     );
   }
@@ -62,10 +56,7 @@ class _AlphaTrackPainter extends CustomPainter {
     const Gradient gradient = LinearGradient(
       colors: <Color>[Colors.transparent, Colors.grey],
     );
-    canvas.drawRect(
-      rect,
-      Paint()..shader = gradient.createShader(rect),
-    );
+    canvas.drawRect(rect, Paint()..shader = gradient.createShader(rect));
   }
 
   @override

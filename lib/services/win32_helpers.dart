@@ -32,40 +32,60 @@ final _getForegroundWindow = _user32
     .lookupFunction<IntPtr Function(), int Function()>('GetForegroundWindow');
 
 // GetWindowRect
-final _getWindowRect = _user32.lookupFunction<
-    Int32 Function(IntPtr hWnd, Pointer<RECT> lpRect),
-    int Function(int hWnd, Pointer<RECT> lpRect)>('GetWindowRect');
+final _getWindowRect = _user32
+    .lookupFunction<
+      Int32 Function(IntPtr hWnd, Pointer<RECT> lpRect),
+      int Function(int hWnd, Pointer<RECT> lpRect)
+    >('GetWindowRect');
 
 // GetWindowThreadProcessId
-final _getWindowThreadProcessId = _user32.lookupFunction<
-    Uint32 Function(IntPtr hWnd, Pointer<Uint32> lpdwProcessId),
-    int Function(
-        int hWnd, Pointer<Uint32> lpdwProcessId)>('GetWindowThreadProcessId');
+final _getWindowThreadProcessId = _user32
+    .lookupFunction<
+      Uint32 Function(IntPtr hWnd, Pointer<Uint32> lpdwProcessId),
+      int Function(int hWnd, Pointer<Uint32> lpdwProcessId)
+    >('GetWindowThreadProcessId');
 
 // OpenProcess
 const int _processQueryLimitedInformation = 0x1000;
-final _openProcess = _kernel32.lookupFunction<
-    IntPtr Function(
-        Uint32 dwDesiredAccess, Int32 bInheritHandle, Uint32 dwProcessId),
-    int Function(
-        int dwDesiredAccess, int bInheritHandle, int dwProcessId)>('OpenProcess');
+final _openProcess = _kernel32
+    .lookupFunction<
+      IntPtr Function(
+        Uint32 dwDesiredAccess,
+        Int32 bInheritHandle,
+        Uint32 dwProcessId,
+      ),
+      int Function(int dwDesiredAccess, int bInheritHandle, int dwProcessId)
+    >('OpenProcess');
 
 // QueryFullProcessImageNameW
-final _queryFullProcessImageName = _kernel32.lookupFunction<
-    Int32 Function(IntPtr hProcess, Uint32 dwFlags, Pointer<Utf16> lpExeName,
-        Pointer<Uint32> lpdwSize),
-    int Function(int hProcess, int dwFlags, Pointer<Utf16> lpExeName,
-        Pointer<Uint32> lpdwSize)>('QueryFullProcessImageNameW');
+final _queryFullProcessImageName = _kernel32
+    .lookupFunction<
+      Int32 Function(
+        IntPtr hProcess,
+        Uint32 dwFlags,
+        Pointer<Utf16> lpExeName,
+        Pointer<Uint32> lpdwSize,
+      ),
+      int Function(
+        int hProcess,
+        int dwFlags,
+        Pointer<Utf16> lpExeName,
+        Pointer<Uint32> lpdwSize,
+      )
+    >('QueryFullProcessImageNameW');
 
 // CloseHandle
 final _closeHandle = _kernel32
     .lookupFunction<Int32 Function(IntPtr hObject), int Function(int hObject)>(
-        'CloseHandle');
+      'CloseHandle',
+    );
 
 // GetCursorPos
-final _getCursorPos = _user32.lookupFunction<
-    Int32 Function(Pointer<POINT>),
-    int Function(Pointer<POINT>)>('GetCursorPos');
+final _getCursorPos = _user32
+    .lookupFunction<
+      Int32 Function(Pointer<POINT>),
+      int Function(Pointer<POINT>)
+    >('GetCursorPos');
 
 // ── Public API ──────────────────────────────────────────────────────
 
@@ -109,12 +129,15 @@ String? getForegroundProcessName() {
     sizePtr.cast<Uint32>().asTypedList(1)[0] = maxPath;
 
     try {
-      final result =
-          _queryFullProcessImageName(hProcess, 0, nameBuf.cast(), sizePtr);
+      final result = _queryFullProcessImageName(
+        hProcess,
+        0,
+        nameBuf.cast(),
+        sizePtr,
+      );
       if (result != 0) {
         final len = sizePtr.cast<Uint32>().asTypedList(1)[0];
-        final fullPath =
-            nameBuf.cast<Utf16>().toDartString(length: len);
+        final fullPath = nameBuf.cast<Utf16>().toDartString(length: len);
         final lastSlash = fullPath.lastIndexOf('\\');
         return lastSlash >= 0 ? fullPath.substring(lastSlash + 1) : fullPath;
       }

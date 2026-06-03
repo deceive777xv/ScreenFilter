@@ -23,18 +23,16 @@ class _PaletteValuePickerState extends State<PaletteValuePicker> {
   HSVColor get color => widget.color;
 
   // Value
-  void valueOnChange(double value) => widget.onChanged(
-        color.withValue(value),
-      );
+  void valueOnChange(double value) => widget.onChanged(color.withValue(value));
   List<Color> get valueColors => <Color>[
-        Colors.black,
-        color.withValue(1.0).toColor(),
-      ];
+    Colors.black,
+    color.withValue(1.0).toColor(),
+  ];
 
   // Hue Saturation
   void hueSaturationOnChange(Offset value) => widget.onChanged(
-        HSVColor.fromAHSV(color.alpha, value.dx, value.dy, color.value),
-      );
+    HSVColor.fromAHSV(color.alpha, value.dx, value.dy, color.value),
+  );
   // Hue
   final List<Color> hueColors = <Color>[
     const Color.fromARGB(255, 255, 0, 0),
@@ -43,7 +41,7 @@ class _PaletteValuePickerState extends State<PaletteValuePicker> {
     const Color.fromARGB(255, 0, 255, 255),
     const Color.fromARGB(255, 0, 0, 255),
     const Color.fromARGB(255, 255, 0, 255),
-    const Color.fromARGB(255, 255, 0, 0)
+    const Color.fromARGB(255, 255, 0, 0),
   ];
   // Saturation
   final List<Color> saturationColors = <Color>[
@@ -78,7 +76,7 @@ class _PaletteValuePickerState extends State<PaletteValuePicker> {
           value: color.value,
           onChanged: valueOnChange,
           colors: valueColors,
-        )
+        ),
       ],
     );
   }

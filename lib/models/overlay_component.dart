@@ -1,5 +1,18 @@
 import 'package:flutter/material.dart';
 
+FontWeight _fontWeightFromJson(Object? value) {
+  final raw = value as int? ?? FontWeight.bold.value;
+  return FontWeight.values.firstWhere(
+    (weight) => weight.value == raw,
+    orElse: () {
+      if (raw >= 0 && raw < FontWeight.values.length) {
+        return FontWeight.values[raw];
+      }
+      return FontWeight.bold;
+    },
+  );
+}
+
 /// 顶层组件类型
 enum OverlayType { clock, slogan, watermark }
 
@@ -39,20 +52,20 @@ class ClockConfig {
   }
 
   Map<String, dynamic> toJson() => {
-        'style': style.index,
-        'fontSize': fontSize,
-        'color': color.value,
-        'showSeconds': showSeconds,
-        'show24Hour': show24Hour,
-      };
+    'style': style.index,
+    'fontSize': fontSize,
+    'color': color.toARGB32(),
+    'showSeconds': showSeconds,
+    'show24Hour': show24Hour,
+  };
 
   factory ClockConfig.fromJson(Map<String, dynamic> json) => ClockConfig(
-        style: ClockStyle.values[json['style'] as int? ?? 0],
-        fontSize: (json['fontSize'] as num?)?.toDouble() ?? 48,
-        color: Color(json['color'] as int? ?? 0xFFFFFFFF),
-        showSeconds: json['showSeconds'] as bool? ?? true,
-        show24Hour: json['show24Hour'] as bool? ?? true,
-      );
+    style: ClockStyle.values[json['style'] as int? ?? 0],
+    fontSize: (json['fontSize'] as num?)?.toDouble() ?? 48,
+    color: Color(json['color'] as int? ?? 0xFFFFFFFF),
+    showSeconds: json['showSeconds'] as bool? ?? true,
+    show24Hour: json['show24Hour'] as bool? ?? true,
+  );
 }
 
 /// 标语组件配置
@@ -88,20 +101,20 @@ class SloganConfig {
   }
 
   Map<String, dynamic> toJson() => {
-        'text': text,
-        'fontSize': fontSize,
-        'color': color.value,
-        'fontFamily': fontFamily,
-        'fontWeight': fontWeight.index,
-      };
+    'text': text,
+    'fontSize': fontSize,
+    'color': color.toARGB32(),
+    'fontFamily': fontFamily,
+    'fontWeight': fontWeight.value,
+  };
 
   factory SloganConfig.fromJson(Map<String, dynamic> json) => SloganConfig(
-        text: json['text'] as String? ?? 'Stay Focused',
-        fontSize: (json['fontSize'] as num?)?.toDouble() ?? 36,
-        color: Color(json['color'] as int? ?? 0xFFFFFFFF),
-        fontFamily: json['fontFamily'] as String? ?? 'Microsoft YaHei',
-        fontWeight: FontWeight.values[json['fontWeight'] as int? ?? 7],
-      );
+    text: json['text'] as String? ?? 'Stay Focused',
+    fontSize: (json['fontSize'] as num?)?.toDouble() ?? 36,
+    color: Color(json['color'] as int? ?? 0xFFFFFFFF),
+    fontFamily: json['fontFamily'] as String? ?? 'Microsoft YaHei',
+    fontWeight: _fontWeightFromJson(json['fontWeight']),
+  );
 }
 
 /// 水印组件配置
@@ -133,11 +146,11 @@ class WatermarkConfig {
   }
 
   Map<String, dynamic> toJson() => {
-        'imagePath': imagePath,
-        'width': width,
-        'height': height,
-        'opacity': opacity,
-      };
+    'imagePath': imagePath,
+    'width': width,
+    'height': height,
+    'opacity': opacity,
+  };
 
   factory WatermarkConfig.fromJson(Map<String, dynamic> json) =>
       WatermarkConfig(
@@ -169,15 +182,14 @@ class OverlayComponent {
   });
 
   Map<String, dynamic> toJson() => {
-        'type': type.index,
-        'enabled': enabled,
-        'posX': position.dx,
-        'posY': position.dy,
-        if (clockConfig != null) 'clockConfig': clockConfig!.toJson(),
-        if (sloganConfig != null) 'sloganConfig': sloganConfig!.toJson(),
-        if (watermarkConfig != null)
-          'watermarkConfig': watermarkConfig!.toJson(),
-      };
+    'type': type.index,
+    'enabled': enabled,
+    'posX': position.dx,
+    'posY': position.dy,
+    if (clockConfig != null) 'clockConfig': clockConfig!.toJson(),
+    if (sloganConfig != null) 'sloganConfig': sloganConfig!.toJson(),
+    if (watermarkConfig != null) 'watermarkConfig': watermarkConfig!.toJson(),
+  };
 
   factory OverlayComponent.fromJson(Map<String, dynamic> json) {
     final type = OverlayType.values[json['type'] as int];
@@ -196,24 +208,25 @@ class OverlayComponent {
           : (type == OverlayType.slogan ? const SloganConfig() : null),
       watermarkConfig: json['watermarkConfig'] != null
           ? WatermarkConfig.fromJson(
-              json['watermarkConfig'] as Map<String, dynamic>)
+              json['watermarkConfig'] as Map<String, dynamic>,
+            )
           : (type == OverlayType.watermark ? const WatermarkConfig() : null),
     );
   }
 
   /// 工厂方法
   static OverlayComponent createClock() => OverlayComponent(
-        type: OverlayType.clock,
-        clockConfig: const ClockConfig(),
-      );
+    type: OverlayType.clock,
+    clockConfig: const ClockConfig(),
+  );
 
   static OverlayComponent createSlogan() => OverlayComponent(
-        type: OverlayType.slogan,
-        sloganConfig: const SloganConfig(),
-      );
+    type: OverlayType.slogan,
+    sloganConfig: const SloganConfig(),
+  );
 
   static OverlayComponent createWatermark() => OverlayComponent(
-        type: OverlayType.watermark,
-        watermarkConfig: const WatermarkConfig(),
-      );
+    type: OverlayType.watermark,
+    watermarkConfig: const WatermarkConfig(),
+  );
 }

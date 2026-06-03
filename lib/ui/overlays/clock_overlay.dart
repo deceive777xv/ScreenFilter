@@ -101,7 +101,7 @@ class _ClockOverlayState extends State<ClockOverlay> {
         fontFamily: 'Consolas',
         shadows: [
           Shadow(
-            color: Colors.black.withOpacity(0.5),
+            color: Colors.black.withValues(alpha: 0.5),
             blurRadius: 4,
             offset: const Offset(1, 1),
           ),
@@ -116,10 +116,7 @@ class _ClockOverlayState extends State<ClockOverlay> {
       width: size,
       height: size,
       child: CustomPaint(
-        painter: _AnalogClockPainter(
-          dateTime: _now,
-          color: _config.color,
-        ),
+        painter: _AnalogClockPainter(dateTime: _now, color: _config.color),
       ),
     );
   }
@@ -161,11 +158,21 @@ class _AnalogClockPainter extends CustomPainter {
     }
 
     // 时针
-    _drawHand(canvas, center, radius * 0.5,
-        (dateTime.hour % 12 + dateTime.minute / 60) * 30 - 90, 3);
+    _drawHand(
+      canvas,
+      center,
+      radius * 0.5,
+      (dateTime.hour % 12 + dateTime.minute / 60) * 30 - 90,
+      3,
+    );
     // 分针
-    _drawHand(canvas, center, radius * 0.7,
-        (dateTime.minute + dateTime.second / 60) * 6 - 90, 2);
+    _drawHand(
+      canvas,
+      center,
+      radius * 0.7,
+      (dateTime.minute + dateTime.second / 60) * 6 - 90,
+      2,
+    );
     // 秒针
     _drawHand(canvas, center, radius * 0.85, dateTime.second * 6.0 - 90, 1);
 
@@ -175,7 +182,12 @@ class _AnalogClockPainter extends CustomPainter {
   }
 
   void _drawHand(
-      Canvas canvas, Offset center, double length, double angleDeg, double width) {
+    Canvas canvas,
+    Offset center,
+    double length,
+    double angleDeg,
+    double width,
+  ) {
     final angle = angleDeg * pi / 180;
     final end = Offset(
       center.dx + length * cos(angle),

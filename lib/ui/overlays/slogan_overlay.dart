@@ -14,8 +14,7 @@ class SloganOverlay extends StatelessWidget {
     required this.onPositionChanged,
   });
 
-  SloganConfig get _config =>
-      component.sloganConfig ?? const SloganConfig();
+  SloganConfig get _config => component.sloganConfig ?? const SloganConfig();
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +31,7 @@ class SloganOverlay extends StatelessWidget {
         fontFamily: _config.fontFamily,
         shadows: [
           Shadow(
-            color: Colors.black.withOpacity(0.5),
+            color: Colors.black.withValues(alpha: 0.5),
             blurRadius: 4,
             offset: const Offset(1, 1),
           ),

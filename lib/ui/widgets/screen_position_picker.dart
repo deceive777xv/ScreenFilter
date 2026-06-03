@@ -76,10 +76,12 @@ class _ScreenPositionPickerState extends State<ScreenPositionPicker> {
     setState(() {
       if (dir == _Direction.center) {
         _activeDirections.clear();
-        widget.onPositionChanged(Offset(
-          (_maxRealX / 2).clamp(0, _maxRealX),
-          (_maxRealY / 2).clamp(0, _maxRealY),
-        ));
+        widget.onPositionChanged(
+          Offset(
+            (_maxRealX / 2).clamp(0, _maxRealX),
+            (_maxRealY / 2).clamp(0, _maxRealY),
+          ),
+        );
         return;
       }
 
@@ -99,12 +101,12 @@ class _ScreenPositionPickerState extends State<ScreenPositionPicker> {
   }
 
   _Direction? _oppositeOf(_Direction dir) => switch (dir) {
-        _Direction.left => _Direction.right,
-        _Direction.right => _Direction.left,
-        _Direction.top => _Direction.bottom,
-        _Direction.bottom => _Direction.top,
-        _ => null,
-      };
+    _Direction.left => _Direction.right,
+    _Direction.right => _Direction.left,
+    _Direction.top => _Direction.bottom,
+    _Direction.bottom => _Direction.top,
+    _ => null,
+  };
 
   void _applyDirectionPreset() {
     double x, y;
@@ -132,16 +134,20 @@ class _ScreenPositionPickerState extends State<ScreenPositionPicker> {
 
   void _showCoordinateInput() {
     // 显示/输入组件中心的物理像素坐标
-    final centerPhysX = ((widget.position.dx + _cSize.width / 2) * _dpr).round();
-    final centerPhysY = ((widget.position.dy + _cSize.height / 2) * _dpr).round();
+    final centerPhysX = ((widget.position.dx + _cSize.width / 2) * _dpr)
+        .round();
+    final centerPhysY = ((widget.position.dy + _cSize.height / 2) * _dpr)
+        .round();
     final xCtrl = TextEditingController(text: '$centerPhysX');
     final yCtrl = TextEditingController(text: '$centerPhysY');
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('输入坐标',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        title: const Text(
+          '输入坐标',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+        ),
         content: Row(
           children: [
             Expanded(
@@ -150,9 +156,10 @@ class _ScreenPositionPickerState extends State<ScreenPositionPicker> {
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: const InputDecoration(
-                    labelText: 'X',
-                    isDense: true,
-                    border: OutlineInputBorder()),
+                  labelText: 'X',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -162,22 +169,24 @@ class _ScreenPositionPickerState extends State<ScreenPositionPicker> {
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: const InputDecoration(
-                    labelText: 'Y',
-                    isDense: true,
-                    border: OutlineInputBorder()),
+                  labelText: 'Y',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
               ),
             ),
           ],
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child:
-                  const Text('取消', style: TextStyle(color: Colors.black54))),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消', style: TextStyle(color: Colors.black54)),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blueAccent,
-                foregroundColor: Colors.white),
+              backgroundColor: Colors.blueAccent,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () {
               // 用户输入的是组件中心物理坐标，转换为左上角逻辑坐标
               final px = double.tryParse(xCtrl.text) ?? 0;
@@ -201,10 +210,14 @@ class _ScreenPositionPickerState extends State<ScreenPositionPicker> {
     // 游标位置：表示组件中心在导览图上的位置
     final compCenterX = widget.position.dx + _cSize.width / 2;
     final compCenterY = widget.position.dy + _cSize.height / 2;
-    final dotX =
-        (compCenterX * _scaleX).clamp(_dotRadius, _mapWidth - _dotRadius);
-    final dotY =
-        (compCenterY * _scaleY).clamp(_dotRadius, _mapHeight - _dotRadius);
+    final dotX = (compCenterX * _scaleX).clamp(
+      _dotRadius,
+      _mapWidth - _dotRadius,
+    );
+    final dotY = (compCenterY * _scaleY).clamp(
+      _dotRadius,
+      _mapHeight - _dotRadius,
+    );
 
     // 组件矩形在导览图上的位置
     final compMapX = widget.position.dx * _scaleX;
@@ -244,8 +257,10 @@ class _ScreenPositionPickerState extends State<ScreenPositionPicker> {
                 onTap: _showCoordinateInput,
                 borderRadius: BorderRadius.circular(4),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF0F0F0),
                     borderRadius: BorderRadius.circular(4),
@@ -254,15 +269,19 @@ class _ScreenPositionPickerState extends State<ScreenPositionPicker> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.edit_location_alt,
-                          size: 13, color: Colors.blueAccent),
+                      const Icon(
+                        Icons.edit_location_alt,
+                        size: 13,
+                        color: Colors.blueAccent,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         '(${((widget.position.dx + _cSize.width / 2) * _dpr).round()}, ${((widget.position.dy + _cSize.height / 2) * _dpr).round()})',
                         style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.black54,
-                            fontFamily: 'Consolas'),
+                          fontSize: 12,
+                          color: Colors.black54,
+                          fontFamily: 'Consolas',
+                        ),
                       ),
                     ],
                   ),
@@ -293,7 +312,11 @@ class _ScreenPositionPickerState extends State<ScreenPositionPicker> {
                   dotRadius: _dotRadius,
                   label: widget.label,
                   compRect: Rect.fromLTWH(
-                      compMapX, compMapY, compMapW, compMapH),
+                    compMapX,
+                    compMapY,
+                    compMapW,
+                    compMapH,
+                  ),
                 ),
               ),
             ),
@@ -319,10 +342,14 @@ class _ScreenPositionPickerState extends State<ScreenPositionPicker> {
               color: isActive ? Colors.blueAccent : const Color(0xFFF0F0F0),
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
-                  color: isActive ? Colors.blueAccent : Colors.black12),
+                color: isActive ? Colors.blueAccent : Colors.black12,
+              ),
             ),
-            child: Icon(icon,
-                size: 15, color: isActive ? Colors.white : Colors.black54),
+            child: Icon(
+              icon,
+              size: 15,
+              color: isActive ? Colors.white : Colors.black54,
+            ),
           ),
         ),
       ),
@@ -351,7 +378,7 @@ class _ScreenMapPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     // 网格线
     final gridPaint = Paint()
-      ..color = Colors.white.withOpacity(0.08)
+      ..color = Colors.white.withValues(alpha: 0.08)
       ..strokeWidth = 0.5;
     for (double x = 0; x < size.width; x += size.width / 8) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
@@ -362,25 +389,25 @@ class _ScreenMapPainter extends CustomPainter {
 
     // 组件矩形预览
     final compFillPaint = Paint()
-      ..color = Colors.blueAccent.withOpacity(0.15)
+      ..color = Colors.blueAccent.withValues(alpha: 0.15)
       ..style = PaintingStyle.fill;
     canvas.drawRect(compRect, compFillPaint);
     final compStrokePaint = Paint()
-      ..color = Colors.blueAccent.withOpacity(0.4)
+      ..color = Colors.blueAccent.withValues(alpha: 0.4)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.8;
     canvas.drawRect(compRect, compStrokePaint);
 
     // 十字线
     final crossPaint = Paint()
-      ..color = Colors.blueAccent.withOpacity(0.4)
+      ..color = Colors.blueAccent.withValues(alpha: 0.4)
       ..strokeWidth = 0.8;
     canvas.drawLine(Offset(dotX, 0), Offset(dotX, size.height), crossPaint);
     canvas.drawLine(Offset(0, dotY), Offset(size.width, dotY), crossPaint);
 
     // 定位点外圈
     final outerPaint = Paint()
-      ..color = Colors.blueAccent.withOpacity(0.3)
+      ..color = Colors.blueAccent.withValues(alpha: 0.3)
       ..style = PaintingStyle.fill;
     canvas.drawCircle(Offset(dotX, dotY), dotRadius + 4, outerPaint);
 
@@ -402,7 +429,7 @@ class _ScreenMapPainter extends CustomPainter {
         text: TextSpan(
           text: label,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.7),
+            color: Colors.white.withValues(alpha: 0.7),
             fontSize: 10,
           ),
         ),

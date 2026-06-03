@@ -102,9 +102,7 @@ class _PalettePickerState extends State<PalettePicker> {
       decoration: BoxDecoration(
         border: widget.border,
         borderRadius: widget.borderRadius,
-        gradient: LinearGradient(
-          colors: widget.leftRightColors,
-        ),
+        gradient: LinearGradient(colors: widget.leftRightColors),
       ),
     );
   }
@@ -135,11 +133,7 @@ class _PalettePickerState extends State<PalettePicker> {
         key: paletteKey,
         width: double.infinity,
         height: double.infinity,
-        child: CustomPaint(
-          painter: _PalettePainter(
-            ratio: positionToRatio(),
-          ),
-        ),
+        child: CustomPaint(painter: _PalettePainter(ratio: positionToRatio())),
       ),
     );
   }
@@ -162,9 +156,7 @@ class _PalettePickerState extends State<PalettePicker> {
 }
 
 class _PalettePainter extends CustomPainter {
-  _PalettePainter({
-    required this.ratio,
-  }) : super();
+  _PalettePainter({required this.ratio}) : super();
 
   final Offset ratio;
 

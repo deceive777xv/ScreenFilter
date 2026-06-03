@@ -14,7 +14,8 @@ class RegionMaskDrawingOverlay extends StatefulWidget {
   });
 
   @override
-  State<RegionMaskDrawingOverlay> createState() => _RegionMaskDrawingOverlayState();
+  State<RegionMaskDrawingOverlay> createState() =>
+      _RegionMaskDrawingOverlayState();
 }
 
 class _RegionMaskDrawingOverlayState extends State<RegionMaskDrawingOverlay> {
@@ -92,7 +93,10 @@ class _RegionMaskDrawingOverlayState extends State<RegionMaskDrawingOverlay> {
               right: 0,
               child: Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xDD1E2030),
                     borderRadius: BorderRadius.circular(10),
@@ -101,7 +105,11 @@ class _RegionMaskDrawingOverlayState extends State<RegionMaskDrawingOverlay> {
                     _vertices.isEmpty
                         ? '点击屏幕放置多边形顶点'
                         : '已放置 ${_vertices.length} 个顶点，至少需要 3 个  |  拖拽顶点可调整位置',
-                    style: const TextStyle(color: Colors.white, fontSize: 14, decoration: TextDecoration.none),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      decoration: TextDecoration.none,
+                    ),
                   ),
                 ),
               ),
@@ -133,15 +141,29 @@ class _RegionMaskDrawingOverlayState extends State<RegionMaskDrawingOverlay> {
       decoration: BoxDecoration(
         color: const Color(0xDD1E2030),
         borderRadius: BorderRadius.circular(14),
-        boxShadow: const [BoxShadow(color: Color(0x30000000), blurRadius: 16, offset: Offset(0, 4))],
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x30000000),
+            blurRadius: 16,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _toolBtn(Icons.undo_rounded, '撤销', _vertices.isEmpty ? null : _undoLast),
+          _toolBtn(
+            Icons.undo_rounded,
+            '撤销',
+            _vertices.isEmpty ? null : _undoLast,
+          ),
           const SizedBox(width: 12),
-          _toolBtn(Icons.check_circle_rounded, '完成', _vertices.length >= 3 ? _finish : null,
-              highlight: true),
+          _toolBtn(
+            Icons.check_circle_rounded,
+            '完成',
+            _vertices.length >= 3 ? _finish : null,
+            highlight: true,
+          ),
           const SizedBox(width: 12),
           _toolBtn(Icons.cancel_rounded, '取消', widget.onCancel),
         ],
@@ -149,19 +171,26 @@ class _RegionMaskDrawingOverlayState extends State<RegionMaskDrawingOverlay> {
     );
   }
 
-  Widget _toolBtn(IconData icon, String label, VoidCallback? onTap, {bool highlight = false}) {
+  Widget _toolBtn(
+    IconData icon,
+    String label,
+    VoidCallback? onTap, {
+    bool highlight = false,
+  }) {
     final active = onTap != null;
     final color = !active
         ? const Color(0xFF6B7280)
         : highlight
-            ? const Color(0xFF3B82F6)
-            : Colors.white;
+        ? const Color(0xFF3B82F6)
+        : Colors.white;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: highlight && active ? const Color(0x203B82F6) : Colors.transparent,
+          color: highlight && active
+              ? const Color(0x203B82F6)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -169,7 +198,15 @@ class _RegionMaskDrawingOverlayState extends State<RegionMaskDrawingOverlay> {
           children: [
             Icon(icon, size: 18, color: color),
             const SizedBox(width: 6),
-            Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600, decoration: TextDecoration.none)),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                decoration: TextDecoration.none,
+              ),
+            ),
           ],
         ),
       ),

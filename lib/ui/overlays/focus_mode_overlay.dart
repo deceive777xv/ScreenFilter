@@ -107,12 +107,17 @@ class _FocusModePainter extends CustomPainter {
 
       final fullPath = Path()..addRect(fullRect);
       final windowPath = Path()
-        ..addRRect(RRect.fromRectAndRadius(
-          logicalRect.intersect(fullRect),
-          Radius.circular(borderRadius),
-        ));
-      final combined =
-          Path.combine(PathOperation.difference, fullPath, windowPath);
+        ..addRRect(
+          RRect.fromRectAndRadius(
+            logicalRect.intersect(fullRect),
+            Radius.circular(borderRadius),
+          ),
+        );
+      final combined = Path.combine(
+        PathOperation.difference,
+        fullPath,
+        windowPath,
+      );
       canvas.drawPath(combined, paint);
     } else {
       canvas.drawRect(fullRect, paint);

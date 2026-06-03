@@ -6,13 +6,11 @@ import 'pickers/rgb_picker.dart';
 import 'pickers/hsv_picker.dart';
 import 'pickers/wheel_picker.dart';
 
+int _colorComponent(double value) =>
+    (value * 255).round().clamp(0, 255).toInt();
+
 /// 取色板类型枚举
-enum PickerType {
-  rgb,
-  hsv,
-  wheel,
-  paletteHue,
-}
+enum PickerType { rgb, hsv, wheel, paletteHue }
 
 /// 自定义颜色选择器面板
 /// 从上到下: 预览色+HEX码 → 取色板下拉菜单 → 圆角矩形取色板 → 色带滑块 → 透明度滑块
@@ -43,7 +41,7 @@ class _ColorPickerPanelState extends State<ColorPickerPanel> {
   void initState() {
     super.initState();
     _hsvColor = HSVColor.fromColor(widget.color);
-    _alpha = widget.color.alpha;
+    _alpha = _colorComponent(widget.color.a);
     _pickerType = PickerType.paletteHue;
     _updateHexText();
   }
@@ -56,9 +54,10 @@ class _ColorPickerPanelState extends State<ColorPickerPanel> {
 
   void _updateHexText() {
     final c = _hsvColor.toColor();
-    final hex = c.red.toRadixString(16).padLeft(2, '0') +
-        c.green.toRadixString(16).padLeft(2, '0') +
-        c.blue.toRadixString(16).padLeft(2, '0');
+    final hex =
+        _colorComponent(c.r).toRadixString(16).padLeft(2, '0') +
+        _colorComponent(c.g).toRadixString(16).padLeft(2, '0') +
+        _colorComponent(c.b).toRadixString(16).padLeft(2, '0');
     _hexController.text = hex.toUpperCase();
   }
 
@@ -79,7 +78,14 @@ class _ColorPickerPanelState extends State<ColorPickerPanel> {
 
   void _emitColor() {
     final c = _hsvColor.toColor();
-    widget.onChanged(Color.fromARGB(_alpha, c.red, c.green, c.blue));
+    widget.onChanged(
+      Color.fromARGB(
+        _alpha,
+        _colorComponent(c.r),
+        _colorComponent(c.g),
+        _colorComponent(c.b),
+      ),
+    );
   }
 
   void _onHexSubmitted(String text) {
@@ -87,8 +93,12 @@ class _ColorPickerPanelState extends State<ColorPickerPanel> {
     if (hex.length == 6) {
       try {
         final intVal = int.parse(hex, radix: 16);
-        final c = Color.fromARGB(255, (intVal >> 16) & 0xFF,
-            (intVal >> 8) & 0xFF, intVal & 0xFF);
+        final c = Color.fromARGB(
+          255,
+          (intVal >> 16) & 0xFF,
+          (intVal >> 8) & 0xFF,
+          intVal & 0xFF,
+        );
         setState(() {
           _hsvColor = HSVColor.fromColor(c);
           _updateHexText();
@@ -111,33 +121,10 @@ class _ColorPickerPanelState extends State<ColorPickerPanel> {
 
   // ─── 取色板面的颜色 ───
   List<Color> get _saturationColors => [
-        Colors.white,
-        HSVColor.fromAHSV(1.0, _hsvColor.hue, 1.0, 1.0).toColor(),
-      ];
-  static const List<Color> _valueColors = [
-    Colors.transparent,
-    Colors.black,
+    Colors.white,
+    HSVColor.fromAHSV(1.0, _hsvColor.hue, 1.0, 1.0).toColor(),
   ];
-
-  // Palette Saturation mode colors
-  List<Color> get _satModeLR => [
-        HSVColor.fromAHSV(1, _hsvColor.hue, 0, 1).toColor(),
-        HSVColor.fromAHSV(1, _hsvColor.hue, 1, 1).toColor(),
-      ];
-  static const List<Color> _satModeTB = [
-    Colors.transparent,
-    Colors.black,
-  ];
-
-  // Palette Value mode colors
-  List<Color> get _valModeLR => [
-        HSVColor.fromAHSV(1, _hsvColor.hue, 0, 1).toColor(),
-        HSVColor.fromAHSV(1, _hsvColor.hue, 1, 1).toColor(),
-      ];
-  List<Color> get _valModeTB => [
-        Colors.white,
-        HSVColor.fromAHSV(1, _hsvColor.hue, 0, 0).toColor(),
-      ];
+  static const List<Color> _valueColors = [Colors.transparent, Colors.black];
 
   @override
   Widget build(BuildContext context) {
@@ -170,7 +157,11 @@ class _ColorPickerPanelState extends State<ColorPickerPanel> {
             shape: BoxShape.circle,
             border: Border.all(color: const Color(0xFF3D4055), width: 2),
             boxShadow: const [
-              BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0, 2)),
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 6,
+                offset: Offset(0, 2),
+              ),
             ],
           ),
           child: ClipOval(
@@ -182,26 +173,32 @@ class _ColorPickerPanelState extends State<ColorPickerPanel> {
         ),
         const SizedBox(width: 14),
         // HEX 输入
-        const Text('#',
-            style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF7C83A1))),
+        const Text(
+          '#',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF7C83A1),
+          ),
+        ),
         const SizedBox(width: 4),
         Expanded(
           child: TextField(
             controller: _hexController,
             style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 3,
-                color: Colors.white),
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 3,
+              color: Colors.white,
+            ),
             decoration: InputDecoration(
               isDense: true,
               filled: true,
               fillColor: const Color(0xFF282A3A),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: const BorderSide(color: Color(0xFF3D4055)),
@@ -212,11 +209,16 @@ class _ColorPickerPanelState extends State<ColorPickerPanel> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide:
-                    const BorderSide(color: Color(0xFF3B82F6), width: 2),
+                borderSide: const BorderSide(
+                  color: Color(0xFF3B82F6),
+                  width: 2,
+                ),
               ),
               hintText: 'RRGGBB',
-              hintStyle: const TextStyle(color: Color(0xFF4A4D60), letterSpacing: 3),
+              hintStyle: const TextStyle(
+                color: Color(0xFF4A4D60),
+                letterSpacing: 3,
+              ),
             ),
             onSubmitted: _onHexSubmitted,
           ),
@@ -263,8 +265,12 @@ class _ColorPickerPanelState extends State<ColorPickerPanel> {
             _pickerLabels[type]!,
             style: TextStyle(
               fontSize: 14,
-              fontWeight: _pickerType == type ? FontWeight.w600 : FontWeight.w400,
-              color: _pickerType == type ? const Color(0xFF60A5FA) : const Color(0xFFB0B5C8),
+              fontWeight: _pickerType == type
+                  ? FontWeight.w600
+                  : FontWeight.w400,
+              color: _pickerType == type
+                  ? const Color(0xFF60A5FA)
+                  : const Color(0xFFB0B5C8),
             ),
           ),
         ),
@@ -284,7 +290,10 @@ class _ColorPickerPanelState extends State<ColorPickerPanel> {
         isDense: false,
         underline: const SizedBox(),
         dropdownColor: const Color(0xFF282A3A),
-        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF7C83A1)),
+        icon: const Icon(
+          Icons.keyboard_arrow_down_rounded,
+          color: Color(0xFF7C83A1),
+        ),
         value: _pickerType,
         items: items,
         onChanged: (v) {
@@ -349,8 +358,8 @@ class _ColorPickerPanelState extends State<ColorPickerPanel> {
     switch (_pickerType) {
       case PickerType.paletteHue:
         position = Offset(_hsvColor.saturation, _hsvColor.value);
-        onChanged = (v) => _onHSVChanged(
-            HSVColor.fromAHSV(1, _hsvColor.hue, v.dx, v.dy));
+        onChanged = (v) =>
+            _onHSVChanged(HSVColor.fromAHSV(1, _hsvColor.hue, v.dx, v.dy));
         leftRightColors = _saturationColors;
         topBottomColors = _valueColors;
         topPos = 1.0;
@@ -358,8 +367,8 @@ class _ColorPickerPanelState extends State<ColorPickerPanel> {
         break;
       default:
         position = Offset(_hsvColor.saturation, _hsvColor.value);
-        onChanged = (v) => _onHSVChanged(
-            HSVColor.fromAHSV(1, _hsvColor.hue, v.dx, v.dy));
+        onChanged = (v) =>
+            _onHSVChanged(HSVColor.fromAHSV(1, _hsvColor.hue, v.dx, v.dy));
         leftRightColors = _saturationColors;
         topBottomColors = _valueColors;
         topPos = 1.0;
@@ -417,20 +426,22 @@ class _ColorPickerPanelState extends State<ColorPickerPanel> {
           padding: const EdgeInsets.only(left: 4, bottom: 6),
           child: Row(
             children: [
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF8B92A5))),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF8B92A5),
+                ),
+              ),
               const Spacer(),
               Text(
-                max > 1
-                    ? '${value.round()}°'
-                    : '${(value * 100).round()}%',
+                max > 1 ? '${value.round()}°' : '${(value * 100).round()}%',
                 style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF60A5FA)),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF60A5FA),
+                ),
               ),
             ],
           ),
@@ -462,18 +473,22 @@ class _ColorPickerPanelState extends State<ColorPickerPanel> {
           padding: const EdgeInsets.only(left: 4, bottom: 6),
           child: Row(
             children: [
-              const Text('透明度',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF8B92A5))),
+              const Text(
+                '透明度',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF8B92A5),
+                ),
+              ),
               const Spacer(),
               Text(
                 '${(_alpha / 255 * 100).round()}%',
                 style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF60A5FA)),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF60A5FA),
+                ),
               ),
             ],
           ),
@@ -508,8 +523,7 @@ class _CheckerPainter extends CustomPainter {
     for (int y = 0; y * side < size.height; y++) {
       for (int x = 0; x * side < size.width; x++) {
         if ((x + y) % 2 == 0) {
-          canvas.drawRect(
-              Rect.fromLTWH(x * side, y * side, side, side), paint);
+          canvas.drawRect(Rect.fromLTWH(x * side, y * side, side, side), paint);
         }
       }
     }
@@ -533,8 +547,7 @@ class _AlphaTrackPainter extends CustomPainter {
       if (i % 2 == 0) {
         canvas.drawRect(Rect.fromLTWH(i * side, 0, side, side), checkPaint);
       } else {
-        canvas.drawRect(
-            Rect.fromLTWH(i * side, side, side, side), checkPaint);
+        canvas.drawRect(Rect.fromLTWH(i * side, side, side, side), checkPaint);
       }
     }
 

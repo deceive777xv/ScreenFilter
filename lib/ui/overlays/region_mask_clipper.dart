@@ -19,10 +19,17 @@ class RegionMaskClipper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!enabled) return child;
-    final activeRegions = regions.where((r) => r.enabled && r.points.length >= 3).toList();
-    if (activeRegions.isEmpty) return inverted ? child : const SizedBox.shrink();
+    final activeRegions = regions
+        .where((r) => r.enabled && r.points.length >= 3)
+        .toList();
+    if (activeRegions.isEmpty) {
+      return inverted ? child : const SizedBox.shrink();
+    }
     return ClipPath(
-      clipper: _RegionMaskCustomClipper(regions: activeRegions, inverted: inverted),
+      clipper: _RegionMaskCustomClipper(
+        regions: activeRegions,
+        inverted: inverted,
+      ),
       child: child,
     );
   }
@@ -57,9 +64,15 @@ class _RegionMaskCustomClipper extends CustomClipper<Path> {
     for (int i = 0; i < regions.length; i++) {
       final a = oldClipper.regions[i];
       final b = regions[i];
-      if (a.id != b.id || a.enabled != b.enabled || a.points.length != b.points.length) return true;
+      if (a.id != b.id ||
+          a.enabled != b.enabled ||
+          a.points.length != b.points.length) {
+        return true;
+      }
       for (int j = 0; j < b.points.length; j++) {
-        if (a.points[j] != b.points[j]) return true;
+        if (a.points[j] != b.points[j]) {
+          return true;
+        }
       }
     }
     return false;

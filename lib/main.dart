@@ -198,7 +198,9 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
 
   Future<void> _loadShader() async {
     try {
-      ui.FragmentProgram program = await ui.FragmentProgram.fromAsset('shaders/filter.frag');
+      ui.FragmentProgram program = await ui.FragmentProgram.fromAsset(
+        'shaders/filter.frag',
+      );
       setState(() {
         _shader = program.fragmentShader();
       });
@@ -208,7 +210,9 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   }
 
   Future<void> initSystemTray() async {
-    String path = Platform.isWindows ? 'assets/screenfilter_icon.ico' : 'assets/screenfilter_icon.png';
+    String path = Platform.isWindows
+        ? 'assets/screenfilter_icon.ico'
+        : 'assets/screenfilter_icon.png';
     try {
       await _systemTray.initSystemTray(
         title: 'Filter',
@@ -242,15 +246,16 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     unawaited(_refreshTrayMenu());
   }
 
-  bool get _baseFilterEnabled => _alpha.abs() > 0.001 || _brightness.abs() > 0.001;
+  bool get _baseFilterEnabled =>
+      _alpha.abs() > 0.001 || _brightness.abs() > 0.001;
   bool get _filterEnabled =>
       _baseFilterEnabled || _shaderFilterService.mode != FilterApplyMode.none;
 
   TrayMenuState get _trayMenuState => TrayMenuState(
-        panelOpen: _isPanelOpen,
-        filterEnabled: _filterEnabled,
-        spotlightEnabled: _spotlightConfig.enabled,
-      );
+    panelOpen: _isPanelOpen,
+    filterEnabled: _filterEnabled,
+    spotlightEnabled: _spotlightConfig.enabled,
+  );
 
   Future<void> _showTrayMenu() async {
     await _setTrayContextMenu();
@@ -265,9 +270,9 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   Future<void> _setTrayContextMenu() async {
     try {
       final menu = Menu();
-      await menu.buildFrom(_buildNativeTrayMenuItems(
-        buildTrayMenuEntries(_trayMenuState),
-      ));
+      await menu.buildFrom(
+        _buildNativeTrayMenuItems(buildTrayMenuEntries(_trayMenuState)),
+      );
       await _systemTray.setContextMenu(menu);
     } catch (e) {
       debugPrint('Tray Menu Error: $e');
@@ -546,8 +551,14 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       _spotlightConfig = config.spotlight;
       _regionMaskConfig = config.regionMask;
       _automationRules = config.automationRules;
+      _automationEnabled = config.automationEnabled;
     });
     _shaderFilterService.updateRegionMask(_regionMaskConfig);
+    if (_automationEnabled) {
+      _startAutomation();
+    } else {
+      _stopAutomation();
+    }
     unawaited(_refreshTrayMenu());
   }
 
@@ -556,7 +567,9 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   @override
   Widget build(BuildContext context) {
     _shaderFilterService.updateScreenSize(MediaQuery.of(context).size);
-    _shaderFilterService.updateDevicePixelRatio(MediaQuery.of(context).devicePixelRatio);
+    _shaderFilterService.updateDevicePixelRatio(
+      MediaQuery.of(context).devicePixelRatio,
+    );
     _shaderFilterService.updateFilterVisuals(
       opacity: _alpha,
       brightness: _brightness,
@@ -582,7 +595,8 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
                   ValueListenableBuilder<ui.Image?>(
                     valueListenable: _shaderFilterService.filterImageNotifier,
                     builder: (context, image, _) {
-                      if (image == null || _shaderFilterService.mode == FilterApplyMode.none) {
+                      if (image == null ||
+                          _shaderFilterService.mode == FilterApplyMode.none) {
                         return const SizedBox();
                       }
                       Widget child = SizedBox.expand(
@@ -590,7 +604,9 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
                       );
                       if (_brightness != 0) {
                         child = ColorFiltered(
-                          colorFilter: ColorFilter.matrix(_makeBrightnessMatrix(_brightness)),
+                          colorFilter: ColorFilter.matrix(
+                            _makeBrightnessMatrix(_brightness),
+                          ),
                           child: child,
                         );
                       }
@@ -659,8 +675,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
               ),
             ),
           ),
-          if (_isPanelOpen)
-            Center(child: _buildPanel()),
+          if (_isPanelOpen) Center(child: _buildPanel()),
           // 区域遮罩绘制模式
           if (_isDrawingRegion)
             RegionMaskDrawingOverlay(
@@ -675,21 +690,11 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   static List<double> _makeBrightnessMatrix(double brightness) {
     if (brightness <= 0) {
       final s = 1.0 + brightness * 0.95;
-      return [
-        s, 0, 0, 0, 0,
-        0, s, 0, 0, 0,
-        0, 0, s, 0, 0,
-        0, 0, 0, 1, 0,
-      ];
+      return [s, 0, 0, 0, 0, 0, s, 0, 0, 0, 0, 0, s, 0, 0, 0, 0, 0, 1, 0];
     } else {
       final s = 1.0 - brightness * 0.95;
       final o = brightness * 0.95 * 255;
-      return [
-        s, 0, 0, 0, o,
-        0, s, 0, 0, o,
-        0, 0, s, 0, o,
-        0, 0, 0, 1, 0,
-      ];
+      return [s, 0, 0, 0, o, 0, s, 0, 0, o, 0, 0, s, 0, o, 0, 0, 0, 1, 0];
     }
   }
 
@@ -700,23 +705,25 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     // 当沙盒/特效激活时，GLSL层全透明无需渲染，直接跳过以避免干扰DX11叠加层
     if (sandboxActive) return const SizedBox();
 
-    return Builder(builder: (context) {
-      final size = MediaQuery.of(context).size;
+    return Builder(
+      builder: (context) {
+        final size = MediaQuery.of(context).size;
 
-      _shader!.setFloat(0, size.width);
-      _shader!.setFloat(1, size.height);
-      _shader!.setFloat(2, _brightness);
-      _shader!.setFloat(3, _alpha);
-      _shader!.setFloat(4, _baseColor.r);
-      _shader!.setFloat(5, _baseColor.g);
-      _shader!.setFloat(6, _baseColor.b);
-      _shader!.setFloat(7, _baseColor.a);
+        _shader!.setFloat(0, size.width);
+        _shader!.setFloat(1, size.height);
+        _shader!.setFloat(2, _brightness);
+        _shader!.setFloat(3, _alpha);
+        _shader!.setFloat(4, _baseColor.r);
+        _shader!.setFloat(5, _baseColor.g);
+        _shader!.setFloat(6, _baseColor.b);
+        _shader!.setFloat(7, _baseColor.a);
 
-      return CustomPaint(
-        size: Size.infinite,
-        painter: ShaderPainter(shader: _shader!),
-      );
-    });
+        return CustomPaint(
+          size: Size.infinite,
+          painter: ShaderPainter(shader: _shader!),
+        );
+      },
+    );
   }
 
   Widget _buildPanel() {

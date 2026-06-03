@@ -40,7 +40,9 @@ float hash2(float2 p) { return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.54
 
 // ─── 雪花 ───────────────────────────────────────────────────────────
 // 60 颗白色雪花从屏幕顶部随机飘落，带左右摇摆
-const _kSnowCode = _kHeader + r'''
+const _kSnowCode =
+    _kHeader +
+    r'''
 float4 main(PS_INPUT input) : SV_TARGET {
     float2 uv    = input.uv;
     float aspect = u_Resolution.x / u_Resolution.y;
@@ -65,7 +67,9 @@ float4 main(PS_INPUT input) : SV_TARGET {
 
 // ─── 星星（菱形 + 光晕）────────────────────────────────────────────
 // 80 颗随机散布，使用菱形 SDF 呈现钻石形，带闪烁和柔和光晕
-const _kStarsCode = _kHeader + r'''
+const _kStarsCode =
+    _kHeader +
+    r'''
 float4 main(PS_INPUT input) : SV_TARGET {
     float2 uv = input.uv;
     float aspect = u_Resolution.x / u_Resolution.y;
@@ -104,7 +108,9 @@ float4 main(PS_INPUT input) : SV_TARGET {
 
 // ─── 萤火虫 ─────────────────────────────────────────────────────────
 // 30 个温暖金绿色光点，沿平滑 Lissajous 轨迹缓慢漂浮，带渐隐效果
-const _kFirefliesCode = _kHeader + r'''
+const _kFirefliesCode =
+    _kHeader +
+    r'''
 float4 main(PS_INPUT input) : SV_TARGET {
     float2 uv  = input.uv;
     float aspect = u_Resolution.x / u_Resolution.y;
@@ -156,7 +162,9 @@ float4 main(PS_INPUT input) : SV_TARGET {
 
 // ─── 极光 ───────────────────────────────────────────────────────────
 // 5 条彩色光带在屏幕顶部缓慢涌动（绿→青→蓝→紫），仿北极光
-const _kAuroraCode = _kHeader + r'''
+const _kAuroraCode =
+    _kHeader +
+    r'''
 float3 auroraPalette(float fi) {
     float t = fi / 4.0;
     float3 c0 = float3(0.08, 0.95, 0.40);   // 绿
@@ -219,7 +227,9 @@ float4 main(PS_INPUT input) : SV_TARGET {
 
 // ─── 阳光 ───────────────────────────────────────────────────────────
 // 10 条金色光束从屏幕上方散射，带呼吸闪烁
-const _kSunbeamsCode = _kHeader + r'''
+const _kSunbeamsCode =
+    _kHeader +
+    r'''
 float4 main(PS_INPUT input) : SV_TARGET {
     float2 uv    = input.uv;
     float aspect = u_Resolution.x / u_Resolution.y;

@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 
 class SliderTitle extends StatelessWidget {
-  const SliderTitle(
-    this.title,
-    this.text, {
-    super.key,
-  });
+  const SliderTitle(this.title, this.text, {super.key});
 
   final String title;
   final String text;

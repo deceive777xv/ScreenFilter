@@ -9,29 +9,53 @@ import 'package:ffi/ffi.dart';
 typedef _EngineInitC = Int32 Function();
 typedef _EngineInitDart = int Function();
 
-typedef _EngineCompileShaderC = Int32 Function(
-    Pointer<Utf8> hlslCode, Int32 codeLength,
-    Pointer<Utf8> errorBuf, Int32 errorBufSize);
-typedef _EngineCompileShaderDart = int Function(
-    Pointer<Utf8> hlslCode, int codeLength,
-    Pointer<Utf8> errorBuf, int errorBufSize);
+typedef _EngineCompileShaderC =
+    Int32 Function(
+      Pointer<Utf8> hlslCode,
+      Int32 codeLength,
+      Pointer<Utf8> errorBuf,
+      Int32 errorBufSize,
+    );
+typedef _EngineCompileShaderDart =
+    int Function(
+      Pointer<Utf8> hlslCode,
+      int codeLength,
+      Pointer<Utf8> errorBuf,
+      int errorBufSize,
+    );
 
-typedef _EngineSetUniformsC = Void Function(
-    Float time, Float resX, Float resY,
-    Float mouseX, Float mouseY,
-    Float accentR, Float accentG, Float accentB, Float accentA);
-typedef _EngineSetUniformsDart = void Function(
-    double time, double resX, double resY,
-    double mouseX, double mouseY,
-    double accentR, double accentG, double accentB, double accentA);
+typedef _EngineSetUniformsC =
+    Void Function(
+      Float time,
+      Float resX,
+      Float resY,
+      Float mouseX,
+      Float mouseY,
+      Float accentR,
+      Float accentG,
+      Float accentB,
+      Float accentA,
+    );
+typedef _EngineSetUniformsDart =
+    void Function(
+      double time,
+      double resX,
+      double resY,
+      double mouseX,
+      double mouseY,
+      double accentR,
+      double accentG,
+      double accentB,
+      double accentA,
+    );
 
 typedef _EngineRenderFrameC = Int32 Function(Int32 width, Int32 height);
 typedef _EngineRenderFrameDart = int Function(int width, int height);
 
-typedef _EngineGetFramePixelsC = Int32 Function(
-    Pointer<Uint8> outPixels, Int32 bufferSize);
-typedef _EngineGetFramePixelsDart = int Function(
-    Pointer<Uint8> outPixels, int bufferSize);
+typedef _EngineGetFramePixelsC =
+    Int32 Function(Pointer<Uint8> outPixels, Int32 bufferSize);
+typedef _EngineGetFramePixelsDart =
+    int Function(Pointer<Uint8> outPixels, int bufferSize);
 
 typedef _EngineShowOverlayC = Int32 Function(Int32 width, Int32 height);
 typedef _EngineShowOverlayDart = int Function(int width, int height);
@@ -39,8 +63,10 @@ typedef _EngineShowOverlayDart = int Function(int width, int height);
 typedef _EngineRenderOverlayFrameC = Int32 Function(Int32 width, Int32 height);
 typedef _EngineRenderOverlayFrameDart = int Function(int width, int height);
 
-typedef _EngineSetFilterVisualsC = Void Function(Float opacity, Float brightness);
-typedef _EngineSetFilterVisualsDart = void Function(double opacity, double brightness);
+typedef _EngineSetFilterVisualsC =
+    Void Function(Float opacity, Float brightness);
+typedef _EngineSetFilterVisualsDart =
+    void Function(double opacity, double brightness);
 
 typedef _EngineHideOverlayC = Void Function();
 typedef _EngineHideOverlayDart = void Function();
@@ -48,22 +74,26 @@ typedef _EngineHideOverlayDart = void Function();
 typedef _EngineIsOverlayActiveC = Int32 Function();
 typedef _EngineIsOverlayActiveDart = int Function();
 
-typedef _EngineSetRegionMaskC = Int32 Function(
-    Int32 enabled,
-    Int32 inverted,
-    Int32 width,
-    Int32 height,
-    Pointer<Float> points,
-    Pointer<Int32> regionPointCounts,
-    Int32 regionCount);
-typedef _EngineSetRegionMaskDart = int Function(
-    int enabled,
-    int inverted,
-    int width,
-    int height,
-    Pointer<Float> points,
-    Pointer<Int32> regionPointCounts,
-    int regionCount);
+typedef _EngineSetRegionMaskC =
+    Int32 Function(
+      Int32 enabled,
+      Int32 inverted,
+      Int32 width,
+      Int32 height,
+      Pointer<Float> points,
+      Pointer<Int32> regionPointCounts,
+      Int32 regionCount,
+    );
+typedef _EngineSetRegionMaskDart =
+    int Function(
+      int enabled,
+      int inverted,
+      int width,
+      int height,
+      Pointer<Float> points,
+      Pointer<Int32> regionPointCounts,
+      int regionCount,
+    );
 
 typedef _EngineShutdownC = Void Function();
 typedef _EngineShutdownDart = void Function();
@@ -105,17 +135,51 @@ class DX11ShaderEngine {
       _lib = DynamicLibrary.open('$exeDir/dx11_shader_engine.dll');
 
       _init = _lib.lookupFunction<_EngineInitC, _EngineInitDart>('engine_init');
-      _compileShader = _lib.lookupFunction<_EngineCompileShaderC, _EngineCompileShaderDart>('engine_compile_shader');
-      _setUniforms = _lib.lookupFunction<_EngineSetUniformsC, _EngineSetUniformsDart>('engine_set_uniforms');
-      _renderFrame = _lib.lookupFunction<_EngineRenderFrameC, _EngineRenderFrameDart>('engine_render_frame');
-      _getFramePixels = _lib.lookupFunction<_EngineGetFramePixelsC, _EngineGetFramePixelsDart>('engine_get_frame_pixels');
-      _showOverlay = _lib.lookupFunction<_EngineShowOverlayC, _EngineShowOverlayDart>('engine_show_overlay');
-      _renderOverlayFrame = _lib.lookupFunction<_EngineRenderOverlayFrameC, _EngineRenderOverlayFrameDart>('engine_render_overlay_frame');
-      _setFilterVisuals = _lib.lookupFunction<_EngineSetFilterVisualsC, _EngineSetFilterVisualsDart>('engine_set_filter_visuals');
-      _hideOverlay = _lib.lookupFunction<_EngineHideOverlayC, _EngineHideOverlayDart>('engine_hide_overlay');
-      _isOverlayActive = _lib.lookupFunction<_EngineIsOverlayActiveC, _EngineIsOverlayActiveDart>('engine_is_overlay_active');
-      _setRegionMask = _lib.lookupFunction<_EngineSetRegionMaskC, _EngineSetRegionMaskDart>('engine_set_region_mask');
-      _shutdown = _lib.lookupFunction<_EngineShutdownC, _EngineShutdownDart>('engine_shutdown');
+      _compileShader = _lib
+          .lookupFunction<_EngineCompileShaderC, _EngineCompileShaderDart>(
+            'engine_compile_shader',
+          );
+      _setUniforms = _lib
+          .lookupFunction<_EngineSetUniformsC, _EngineSetUniformsDart>(
+            'engine_set_uniforms',
+          );
+      _renderFrame = _lib
+          .lookupFunction<_EngineRenderFrameC, _EngineRenderFrameDart>(
+            'engine_render_frame',
+          );
+      _getFramePixels = _lib
+          .lookupFunction<_EngineGetFramePixelsC, _EngineGetFramePixelsDart>(
+            'engine_get_frame_pixels',
+          );
+      _showOverlay = _lib
+          .lookupFunction<_EngineShowOverlayC, _EngineShowOverlayDart>(
+            'engine_show_overlay',
+          );
+      _renderOverlayFrame = _lib
+          .lookupFunction<
+            _EngineRenderOverlayFrameC,
+            _EngineRenderOverlayFrameDart
+          >('engine_render_overlay_frame');
+      _setFilterVisuals = _lib
+          .lookupFunction<
+            _EngineSetFilterVisualsC,
+            _EngineSetFilterVisualsDart
+          >('engine_set_filter_visuals');
+      _hideOverlay = _lib
+          .lookupFunction<_EngineHideOverlayC, _EngineHideOverlayDart>(
+            'engine_hide_overlay',
+          );
+      _isOverlayActive = _lib
+          .lookupFunction<_EngineIsOverlayActiveC, _EngineIsOverlayActiveDart>(
+            'engine_is_overlay_active',
+          );
+      _setRegionMask = _lib
+          .lookupFunction<_EngineSetRegionMaskC, _EngineSetRegionMaskDart>(
+            'engine_set_region_mask',
+          );
+      _shutdown = _lib.lookupFunction<_EngineShutdownC, _EngineShutdownDart>(
+        'engine_shutdown',
+      );
 
       return true;
     } catch (e) {
@@ -135,7 +199,9 @@ class DX11ShaderEngine {
   ShaderCompileResult compileShader(String hlslCode) {
     if (!_initialized) {
       return const ShaderCompileResult(
-          success: false, errorMessage: 'Engine not initialized');
+        success: false,
+        errorMessage: 'Engine not initialized',
+      );
     }
 
     final codePtr = hlslCode.toNativeUtf8();
@@ -176,8 +242,17 @@ class DX11ShaderEngine {
     double accentA = 1,
   }) {
     if (!_initialized) return;
-    _setUniforms(time, resolutionX, resolutionY, mouseX, mouseY,
-        accentR, accentG, accentB, accentA);
+    _setUniforms(
+      time,
+      resolutionX,
+      resolutionY,
+      mouseX,
+      mouseY,
+      accentR,
+      accentG,
+      accentB,
+      accentA,
+    );
   }
 
   /// Render a frame and return the RGBA pixel data.
@@ -210,10 +285,7 @@ class DX11ShaderEngine {
     return _renderOverlayFrame(width, height) == 0;
   }
 
-  void setFilterVisuals({
-    required double opacity,
-    required double brightness,
-  }) {
+  void setFilterVisuals({required double opacity, required double brightness}) {
     if (!_initialized) return;
     _setFilterVisuals(opacity, brightness);
   }

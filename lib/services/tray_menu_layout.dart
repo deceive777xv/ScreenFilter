@@ -9,12 +9,7 @@ enum TrayMenuAction {
   exit,
 }
 
-enum TrayMenuEntryKind {
-  item,
-  checkbox,
-  separator,
-  submenu,
-}
+enum TrayMenuEntryKind { item, checkbox, separator, submenu }
 
 class TrayMenuState {
   final bool panelOpen;
@@ -46,40 +41,32 @@ class TrayMenuEntry {
   const TrayMenuEntry.item({
     required String label,
     required TrayMenuAction action,
-  }) : this._(
-          kind: TrayMenuEntryKind.item,
-          label: label,
-          action: action,
-        );
+  }) : this._(kind: TrayMenuEntryKind.item, label: label, action: action);
 
   const TrayMenuEntry.checkbox({
     required String label,
     required TrayMenuAction action,
     required bool checked,
   }) : this._(
-          kind: TrayMenuEntryKind.checkbox,
-          label: label,
-          action: action,
-          checked: checked,
-        );
+         kind: TrayMenuEntryKind.checkbox,
+         label: label,
+         action: action,
+         checked: checked,
+       );
 
   const TrayMenuEntry.separator()
-      : this._(
-          kind: TrayMenuEntryKind.separator,
-          label: '',
-          action: null,
-        );
+    : this._(kind: TrayMenuEntryKind.separator, label: '', action: null);
 
   const TrayMenuEntry.submenu({
     required String label,
     required TrayMenuAction action,
     required List<TrayMenuEntry> children,
   }) : this._(
-          kind: TrayMenuEntryKind.submenu,
-          label: label,
-          action: action,
-          children: children,
-        );
+         kind: TrayMenuEntryKind.submenu,
+         label: label,
+         action: action,
+         children: children,
+       );
 }
 
 List<TrayMenuEntry> buildTrayMenuEntries(TrayMenuState state) {
@@ -112,16 +99,10 @@ List<TrayMenuEntry> buildTrayMenuEntries(TrayMenuState state) {
           label: '夜间',
           action: TrayMenuAction.applyNightPreset,
         ),
-        TrayMenuEntry.item(
-          label: '清除滤镜',
-          action: TrayMenuAction.clearFilter,
-        ),
+        TrayMenuEntry.item(label: '清除滤镜', action: TrayMenuAction.clearFilter),
       ],
     ),
     const TrayMenuEntry.separator(),
-    const TrayMenuEntry.item(
-      label: '退出',
-      action: TrayMenuAction.exit,
-    ),
+    const TrayMenuEntry.item(label: '退出', action: TrayMenuAction.exit),
   ];
 }

@@ -79,6 +79,8 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     _timer?.cancel();
     _compileDebounce?.cancel();
     _stopwatch.stop();
+    _previewImage?.dispose();
+    _previewImage = null;
     // Don't dispose the engine — service owns it.
     // Let the service resume its own timer if needed.
     _service.resumeOwnTimerIfNeeded();
@@ -156,26 +158,43 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
   Future<void> _createPreviewImage(Uint8List pixels, int w, int h) async {
     final completer = Completer<ui.Image>();
     ui.decodeImageFromPixels(
-      pixels, w, h, ui.PixelFormat.rgba8888,
+      pixels,
+      w,
+      h,
+      ui.PixelFormat.rgba8888,
       (image) => completer.complete(image),
     );
     final image = await completer.future;
     if (mounted) {
-      setState(() => _previewImage = image);
+      _replacePreviewImage(image);
+    } else {
+      image.dispose();
     }
   }
 
   Future<void> _createFilterImage(Uint8List pixels, int w, int h) async {
     final completer = Completer<ui.Image>();
     ui.decodeImageFromPixels(
-      pixels, w, h, ui.PixelFormat.rgba8888,
+      pixels,
+      w,
+      h,
+      ui.PixelFormat.rgba8888,
       completer.complete,
     );
     final image = await completer.future;
     // Guard against stale async decode completing after filter was stopped.
     if (_service.mode != FilterApplyMode.none) {
-      _service.filterImageNotifier.value = image;
+      _service.updateFallbackImage(image);
+    } else {
+      image.dispose();
     }
+  }
+
+  void _replacePreviewImage(ui.Image? nextImage) {
+    final previousImage = _previewImage;
+    if (identical(previousImage, nextImage)) return;
+    setState(() => _previewImage = nextImage);
+    previousImage?.dispose();
   }
 
   // ── Code change ────────────────────────────────────────────────
@@ -374,8 +393,9 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
                         child: UniformControlsPanel(
                           elapsedTime: _elapsedTime,
                           resolution: Size(
-                              _previewWidth.toDouble(),
-                              _previewHeight.toDouble()),
+                            _previewWidth.toDouble(),
+                            _previewHeight.toDouble(),
+                          ),
                           mousePosition: _mousePosition,
                           accentColor: _accentColor,
                           isRunning: _isRunning,
@@ -449,27 +469,31 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.folder_outlined,
-              size: 14, color: Color(0xFF6C7086)),
+          const Icon(Icons.folder_outlined, size: 14, color: Color(0xFF6C7086)),
           const SizedBox(width: 6),
-          const Text('文件',
-              style: TextStyle(fontSize: 11, color: Color(0xFF6C7086))),
+          const Text(
+            '文件',
+            style: TextStyle(fontSize: 11, color: Color(0xFF6C7086)),
+          ),
           const SizedBox(width: 12),
           _toolbarButton(
-              icon: Icons.file_open_outlined,
-              label: '导入',
-              onTap: _importShader),
+            icon: Icons.file_open_outlined,
+            label: '导入',
+            onTap: _importShader,
+          ),
           const SizedBox(width: 6),
           _toolbarButton(
-              icon: Icons.save_outlined,
-              label: '导出 .shader',
-              onTap: _exportShader),
+            icon: Icons.save_outlined,
+            label: '导出 .shader',
+            onTap: _exportShader,
+          ),
           const Spacer(),
           _toolbarButton(
-              icon: Icons.restart_alt,
-              label: '重置代码',
-              color: const Color(0xFFEF4444).withValues(alpha: 0.7),
-              onTap: _resetToDefault),
+            icon: Icons.restart_alt,
+            label: '重置代码',
+            color: const Color(0xFFEF4444).withValues(alpha: 0.7),
+            onTap: _resetToDefault,
+          ),
         ],
       ),
     );
@@ -483,15 +507,15 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.filter_alt,
-              size: 14, color: Color(0xFFF9E2AF)),
+          const Icon(Icons.filter_alt, size: 14, color: Color(0xFFF9E2AF)),
           const SizedBox(width: 6),
           Text(
             _filterMode == FilterApplyMode.static ? '静态模式' : '动态模式',
             style: const TextStyle(
-                fontSize: 11,
-                color: Color(0xFFF9E2AF),
-                fontWeight: FontWeight.w600),
+              fontSize: 11,
+              color: Color(0xFFF9E2AF),
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(width: 8),
           _toolbarButton(
@@ -507,11 +531,16 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.filter_alt_outlined,
-            size: 14, color: Color(0xFF6C7086)),
+        const Icon(
+          Icons.filter_alt_outlined,
+          size: 14,
+          color: Color(0xFF6C7086),
+        ),
         const SizedBox(width: 6),
-        const Text('应用滤镜',
-            style: TextStyle(fontSize: 11, color: Color(0xFF6C7086))),
+        const Text(
+          '应用滤镜',
+          style: TextStyle(fontSize: 11, color: Color(0xFF6C7086)),
+        ),
         const SizedBox(width: 8),
         _toolbarButton(
           icon: Icons.photo_filter_outlined,
@@ -539,8 +568,8 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
         color: _compileSuccess
             ? const Color(0xFF166534).withValues(alpha: 0.3)
             : (_compileError != null
-                ? const Color(0xFF7F1D1D).withValues(alpha: 0.3)
-                : const Color(0xFF313244)),
+                  ? const Color(0xFF7F1D1D).withValues(alpha: 0.3)
+                  : const Color(0xFF313244)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -549,15 +578,13 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
           Icon(
             _compileSuccess
                 ? Icons.check_circle
-                : (_compileError != null
-                    ? Icons.error
-                    : Icons.circle_outlined),
+                : (_compileError != null ? Icons.error : Icons.circle_outlined),
             size: 12,
             color: _compileSuccess
                 ? const Color(0xFFA6E3A1)
                 : (_compileError != null
-                    ? const Color(0xFFEF4444)
-                    : const Color(0xFF9399B2)),
+                      ? const Color(0xFFEF4444)
+                      : const Color(0xFF9399B2)),
           ),
           const SizedBox(width: 4),
           Text(
@@ -569,8 +596,8 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
               color: _compileSuccess
                   ? const Color(0xFFA6E3A1)
                   : (_compileError != null
-                      ? const Color(0xFFEF4444)
-                      : const Color(0xFF9399B2)),
+                        ? const Color(0xFFEF4444)
+                        : const Color(0xFF9399B2)),
             ),
           ),
         ],
@@ -590,8 +617,10 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
         children: [
           Icon(Icons.warning_amber, size: 12, color: Color(0xFFFBBF24)),
           SizedBox(width: 4),
-          Text('DX11引擎未加载',
-              style: TextStyle(fontSize: 11, color: Color(0xFFFBBF24))),
+          Text(
+            'DX11引擎未加载',
+            style: TextStyle(fontSize: 11, color: Color(0xFFFBBF24)),
+          ),
         ],
       ),
     );
@@ -645,19 +674,18 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: const BoxDecoration(
-                border:
-                    Border(bottom: BorderSide(color: Color(0xFF313244))),
+                border: Border(bottom: BorderSide(color: Color(0xFF313244))),
               ),
               child: const Row(
                 children: [
                   Icon(Icons.tv, size: 13, color: Color(0xFF89B4FA)),
                   SizedBox(width: 6),
-                  Text('预览',
-                      style: TextStyle(
-                          fontSize: 12, color: Color(0xFFCDD6F4))),
+                  Text(
+                    '预览',
+                    style: TextStyle(fontSize: 12, color: Color(0xFFCDD6F4)),
+                  ),
                 ],
               ),
             ),
@@ -695,14 +723,16 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.videogame_asset_off,
-                size: 32, color: Color(0xFF45475A)),
+            Icon(Icons.videogame_asset_off, size: 32, color: Color(0xFF45475A)),
             SizedBox(height: 8),
             Text(
               'DX11 引擎未就绪\n编辑器仍可使用',
               textAlign: TextAlign.center,
               style: TextStyle(
-                  fontSize: 11, color: Color(0xFF6C7086), height: 1.4),
+                fontSize: 11,
+                color: Color(0xFF6C7086),
+                height: 1.4,
+              ),
             ),
           ],
         ),
@@ -720,7 +750,10 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
               'Shader 编译失败\n请修复错误',
               textAlign: TextAlign.center,
               style: TextStyle(
-                  fontSize: 11, color: Color(0xFF6C7086), height: 1.4),
+                fontSize: 11,
+                color: Color(0xFF6C7086),
+                height: 1.4,
+              ),
             ),
           ],
         ),
@@ -738,7 +771,9 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
 
     return const Center(
       child: CircularProgressIndicator(
-          strokeWidth: 2, color: Color(0xFF89B4FA)),
+        strokeWidth: 2,
+        color: Color(0xFF89B4FA),
+      ),
     );
   }
 }

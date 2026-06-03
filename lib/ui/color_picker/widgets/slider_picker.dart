@@ -13,7 +13,7 @@ class SliderPicker extends StatefulWidget {
     this.border = const Border.fromBorderSide(BorderSide(color: Colors.grey)),
     this.height = 40,
     super.key,
-  })  : assert(value >= min && value <= max);
+  }) : assert(value >= min && value <= max);
   final Border? border;
   final double height;
   final BorderRadius? borderRadius;
@@ -36,9 +36,8 @@ class _SliderPickerState extends State<SliderPicker> {
   double get max => widget.max;
 
   double getRatio() => ((value - min) / (max - min)).clamp(0.0, 1.0);
-  void setRatio(double ratio) => widget.onChanged(
-        (ratio * (max - min) + min).clamp(min, max),
-      );
+  void setRatio(double ratio) =>
+      widget.onChanged((ratio * (max - min) + min).clamp(min, max));
 
   void onPanUpdate(DragUpdateDetails details, BoxConstraints box) {
     final RenderBox? renderBox = super.context.findRenderObject() as RenderBox?;
@@ -60,9 +59,8 @@ class _SliderPickerState extends State<SliderPicker> {
             id: _SliderLayout.track,
             child: (widget.colors == null)
                 ?
-
-                // Child
-                DecoratedBox(
+                  // Child
+                  DecoratedBox(
                     decoration: BoxDecoration(
                       borderRadius: widget.borderRadius,
                       border: widget.border,
@@ -73,9 +71,8 @@ class _SliderPickerState extends State<SliderPicker> {
                     ),
                   )
                 :
-
-                // Color
-                DecoratedBox(
+                  // Color
+                  DecoratedBox(
                     decoration: BoxDecoration(
                       borderRadius: widget.borderRadius,
                       border: widget.border,
@@ -89,12 +86,13 @@ class _SliderPickerState extends State<SliderPicker> {
             id: _SliderLayout.thumb,
             child: Transform(
               transform: Matrix4.identity()
-                ..translate(
+                ..translateByDouble(
                   _ThumbPainter.getWidth(getRatio(), maxWidth),
+                  0,
+                  0,
+                  1,
                 ),
-              child: CustomPaint(
-                painter: _ThumbPainter(),
-              ),
+              child: CustomPaint(painter: _ThumbPainter()),
             ),
           ),
 
@@ -102,7 +100,7 @@ class _SliderPickerState extends State<SliderPicker> {
           LayoutId(
             id: _SliderLayout.gestureContainer,
             child: LayoutBuilder(builder: buildGestureDetector),
-          )
+          ),
         ],
       ),
     );
@@ -111,9 +109,7 @@ class _SliderPickerState extends State<SliderPicker> {
   Widget buildGestureDetector(BuildContext context, BoxConstraints box) {
     return GestureDetector(
       onPanUpdate: (DragUpdateDetails detail) => onPanUpdate(detail, box),
-      child: Container(
-        color: const Color(0x00000000),
-      ),
+      child: Container(color: const Color(0x00000000)),
     );
   }
 
@@ -141,7 +137,9 @@ class _SliderLayout extends MultiChildLayoutDelegate {
     super.layoutChild(
       track,
       BoxConstraints.tightFor(
-          width: size.width, height: _ThumbPainter.doubleTrackWidth),
+        width: size.width,
+        height: _ThumbPainter.doubleTrackWidth,
+      ),
     );
     super.positionChild(
       track,
@@ -153,10 +151,7 @@ class _SliderLayout extends MultiChildLayoutDelegate {
       thumb,
       BoxConstraints.tightFor(width: 10.0, height: size.height / 2),
     );
-    super.positionChild(
-      thumb,
-      Offset(0.0, size.height * 0.5),
-    );
+    super.positionChild(thumb, Offset(0.0, size.height * 0.5));
 
     // GestureContainer
     super.layoutChild(

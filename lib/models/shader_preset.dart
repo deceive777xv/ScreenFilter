@@ -75,10 +75,7 @@ float4 main(PS_INPUT input) : SV_TARGET {
         'created': created.toIso8601String(),
         'tags': tags,
       },
-      'shader': {
-        'language': 'hlsl',
-        'code': code,
-      },
+      'shader': {'language': 'hlsl', 'code': code},
       'uniforms': {
         'u_AccentColor': [
           accentColor.r,
@@ -99,7 +96,9 @@ float4 main(PS_INPUT input) : SV_TARGET {
     if (uniforms.containsKey('u_AccentColor')) {
       final c = uniforms['u_AccentColor'] as List;
       accent = Color.fromARGB(
-        ((c.length > 3 ? c[3] : 1.0) as num).toDouble().clamp(0, 1).toDouble() * 255 ~/ 1,
+        ((c.length > 3 ? c[3] : 1.0) as num).toDouble().clamp(0, 1).toDouble() *
+            255 ~/
+            1,
         ((c[0] as num).toDouble().clamp(0, 1) * 255).toInt(),
         ((c[1] as num).toDouble().clamp(0, 1) * 255).toInt(),
         ((c[2] as num).toDouble().clamp(0, 1) * 255).toInt(),

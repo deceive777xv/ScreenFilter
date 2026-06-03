@@ -64,20 +64,17 @@ class SettingsService {
   Future<void> setAlpha(double v) => _prefs.setDouble(_keyAlpha, v);
 
   Future<void> setBaseColor(Color c) =>
-      // ignore: deprecated_member_use
-      _prefs.setInt(_keyBaseColorValue, c.value);
+      _prefs.setInt(_keyBaseColorValue, c.toARGB32());
 
   Future<void> setActivePreset(String? name) {
     if (name == null) return _prefs.remove(_keyActivePreset);
     return _prefs.setString(_keyActivePreset, name);
   }
 
-  Future<void> setRecentColors(List<Color> colors) =>
-      _prefs.setStringList(
-        _keyRecentColors,
-        // ignore: deprecated_member_use
-        colors.map((c) => c.value.toString()).toList(),
-      );
+  Future<void> setRecentColors(List<Color> colors) => _prefs.setStringList(
+    _keyRecentColors,
+    colors.map((c) => c.toARGB32().toString()).toList(),
+  );
 
   // ─── 顶层组件 ───
 
@@ -94,8 +91,7 @@ class SettingsService {
           return OverlayComponent.createWatermark();
       }
     }
-    return OverlayComponent.fromJson(
-        jsonDecode(json) as Map<String, dynamic>);
+    return OverlayComponent.fromJson(jsonDecode(json) as Map<String, dynamic>);
   }
 
   Future<void> setOverlayComponent(OverlayComponent component) {
@@ -118,9 +114,11 @@ class SettingsService {
 
   bool getStartupEnabled() => _prefs.getBool(_keyStartupEnabled) ?? false;
   String getThemeMode() => _prefs.getString(_keyThemeMode) ?? 'light';
-  String getFontFamily() => _prefs.getString(_keyFontFamily) ?? 'Microsoft YaHei';
+  String getFontFamily() =>
+      _prefs.getString(_keyFontFamily) ?? 'Microsoft YaHei';
 
-  Future<void> setStartupEnabled(bool v) => _prefs.setBool(_keyStartupEnabled, v);
+  Future<void> setStartupEnabled(bool v) =>
+      _prefs.setBool(_keyStartupEnabled, v);
   Future<void> setThemeMode(String v) => _prefs.setString(_keyThemeMode, v);
   Future<void> setFontFamily(String v) => _prefs.setString(_keyFontFamily, v);
 
@@ -160,7 +158,10 @@ class SettingsService {
       _prefs.setString(_keySpotlight, jsonEncode(config.toJson()));
 
   Future<void> setAutomationRules(List<AutomationRule> rules) =>
-      _prefs.setString(_keyAutomationRules, jsonEncode(rules.map((r) => r.toJson()).toList()));
+      _prefs.setString(
+        _keyAutomationRules,
+        jsonEncode(rules.map((r) => r.toJson()).toList()),
+      );
 
   Future<void> setAutomationEnabled(bool v) =>
       _prefs.setBool(_keyAutomationEnabled, v);
@@ -189,6 +190,26 @@ class SettingsService {
       setBaseColor(baseColor),
       setActivePreset(activePreset),
       if (recentColors != null) setRecentColors(recentColors),
+    ]);
+  }
+
+  Future<void> saveAppConfig(AppConfig config) async {
+    await saveAll(
+      brightness: config.brightness,
+      alpha: config.alpha,
+      baseColor: config.baseColor,
+      activePreset: config.activePreset,
+      recentColors: config.recentColors,
+    );
+    await Future.wait([
+      setFontFamily(config.fontFamily),
+      setStartupEnabled(config.startupEnabled),
+      setThemeMode(config.themeMode),
+      setAutomationEnabled(config.automationEnabled),
+      setFocusModeConfig(config.focusMode),
+      setSpotlightConfig(config.spotlight),
+      setRegionMaskConfig(config.regionMask),
+      setAutomationRules(config.automationRules),
     ]);
   }
 }

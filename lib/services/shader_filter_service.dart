@@ -19,11 +19,15 @@ final class _POINT extends Struct {
 
 typedef _GetCursorPosC = Int32 Function(Pointer<_POINT>);
 typedef _GetCursorPosDart = int Function(Pointer<_POINT>);
-final _getCursorPos =
-    _user32.lookupFunction<_GetCursorPosC, _GetCursorPosDart>('GetCursorPos');
+final _getCursorPos = _user32.lookupFunction<_GetCursorPosC, _GetCursorPosDart>(
+  'GetCursorPos',
+);
 
 /// Filter apply mode.
 enum FilterApplyMode { none, static, dynamic }
+
+typedef FilterImageDecoder =
+    Future<ui.Image> Function(Uint8List pixels, int width, int height);
 
 /// Manages the DX11 shader engine and fullscreen filter rendering.
 ///
@@ -31,10 +35,14 @@ enum FilterApplyMode { none, static, dynamic }
 /// open/close cycles.  The sandbox page borrows this service for
 /// preview rendering and shader compilation.
 class ShaderFilterService {
-  ShaderFilterService({DX11ShaderEngine? engine})
-      : _engine = engine ?? DX11ShaderEngine();
+  ShaderFilterService({
+    DX11ShaderEngine? engine,
+    FilterImageDecoder? decodePixels,
+  }) : _engine = engine ?? DX11ShaderEngine(),
+       _decodePixelsToImage = decodePixels ?? _defaultDecodePixels;
 
   final DX11ShaderEngine _engine;
+  final FilterImageDecoder _decodePixelsToImage;
   bool _engineReady = false;
   bool _shaderCompiled = false;
   bool _nativeOverlayActive = false;
@@ -71,13 +79,17 @@ class ShaderFilterService {
       _toPhysicalPixels(_screenSize.height).toDouble(),
     );
   }
+
   Color get accentColor => _accentColor;
   double get filterOpacity => _filterOpacity;
   double get filterBrightness => _filterBrightness;
-  bool get isNativeOverlayActive => _nativeOverlayActive && _engine.isOverlayActive;
+  bool get isNativeOverlayActive =>
+      _nativeOverlayActive && _engine.isOverlayActive;
 
   /// Notifies listeners when filter mode changes (for mutual exclusion).
-  final ValueNotifier<FilterApplyMode> modeNotifier = ValueNotifier(FilterApplyMode.none);
+  final ValueNotifier<FilterApplyMode> modeNotifier = ValueNotifier(
+    FilterApplyMode.none,
+  );
 
   // ── Lifecycle ────────────────────────────────────────────────
 
@@ -98,8 +110,10 @@ class ShaderFilterService {
   void dispose() {
     _filterTimer?.cancel();
     _stopwatch.stop();
+    _replaceFilterImage(null);
     _engine.hideOverlay();
     _engine.dispose();
+    filterImageNotifier.dispose();
   }
 
   // ── Compilation ──────────────────────────────────────────────
@@ -162,7 +176,10 @@ class ShaderFilterService {
     _syncRegionMaskToEngine();
   }
 
-  void updateFilterVisuals({required double opacity, required double brightness}) {
+  void updateFilterVisuals({
+    required double opacity,
+    required double brightness,
+  }) {
     final nextOpacity = opacity.clamp(0.0, 1.0);
     final nextBrightness = brightness.clamp(-1.0, 1.0);
     if (nextOpacity == _filterOpacity && nextBrightness == _filterBrightness) {
@@ -199,7 +216,11 @@ class ShaderFilterService {
   }
 
   /// Apply the current compiled shader as fullscreen filter.
-  void applyFilter(FilterApplyMode newMode, Size screenSize, Color accentColor) {
+  void applyFilter(
+    FilterApplyMode newMode,
+    Size screenSize,
+    Color accentColor,
+  ) {
     _mode = newMode;
     _screenSize = screenSize;
     _accentColor = accentColor;
@@ -208,7 +229,7 @@ class ShaderFilterService {
     _filterTimer = null;
 
     if (newMode == FilterApplyMode.none) {
-      filterImageNotifier.value = null;
+      _replaceFilterImage(null);
       _nativeOverlayActive = false;
       _engine.hideOverlay();
       return;
@@ -216,7 +237,7 @@ class ShaderFilterService {
 
     _nativeOverlayActive = _tryStartNativeOverlay();
     if (_nativeOverlayActive) {
-      filterImageNotifier.value = null;
+      _replaceFilterImage(null);
     }
 
     if (newMode == FilterApplyMode.static) {
@@ -237,10 +258,14 @@ class ShaderFilterService {
     _mode = FilterApplyMode.none;
     _filterTimer?.cancel();
     _filterTimer = null;
-    filterImageNotifier.value = null;
+    _replaceFilterImage(null);
     _nativeOverlayActive = false;
     _engine.hideOverlay();
     modeNotifier.value = FilterApplyMode.none;
+  }
+
+  void updateFallbackImage(ui.Image? image) {
+    _replaceFilterImage(image);
   }
 
   // Called when the sandbox page takes over rendering (it will
@@ -310,7 +335,7 @@ class ShaderFilterService {
 
     if (_nativeOverlayActive) {
       if (_engine.renderOverlayFrame(w, h)) {
-        filterImageNotifier.value = null;
+        _replaceFilterImage(null);
         return;
       }
       _nativeOverlayActive = false;
@@ -347,8 +372,8 @@ class ShaderFilterService {
     final inverted = enabled && _regionMaskConfig.inverted;
     final activeRegions = enabled
         ? _regionMaskConfig.regions
-            .where((region) => region.enabled && region.points.length >= 3)
-            .toList()
+              .where((region) => region.enabled && region.points.length >= 3)
+              .toList()
         : const <MaskRegion>[];
     final points = <double>[];
     final regionPointCounts = <int>[];
@@ -403,7 +428,10 @@ class ShaderFilterService {
     final mouseX = _lastFullscreenMouseX;
     final mouseY = _lastFullscreenMouseY;
     final accentColor = _lastFullscreenAccentColor;
-    if (time == null || mouseX == null || mouseY == null || accentColor == null) {
+    if (time == null ||
+        mouseX == null ||
+        mouseY == null ||
+        accentColor == null) {
       return;
     }
 
@@ -454,15 +482,35 @@ class ShaderFilterService {
   }
 
   Future<void> _decodePixels(Uint8List pixels, int w, int h) async {
-    final completer = Completer<ui.Image>();
-    ui.decodeImageFromPixels(
-      pixels, w, h, ui.PixelFormat.rgba8888,
-      completer.complete,
-    );
-    final image = await completer.future;
+    final image = await _decodePixelsToImage(pixels, w, h);
     // Guard against stale async decode completing after stopFilter().
     if (_mode != FilterApplyMode.none && !_nativeOverlayActive) {
-      filterImageNotifier.value = image;
+      _replaceFilterImage(image);
+    } else {
+      image.dispose();
     }
+  }
+
+  void _replaceFilterImage(ui.Image? nextImage) {
+    final previousImage = filterImageNotifier.value;
+    if (identical(previousImage, nextImage)) return;
+    filterImageNotifier.value = nextImage;
+    previousImage?.dispose();
+  }
+
+  static Future<ui.Image> _defaultDecodePixels(
+    Uint8List pixels,
+    int w,
+    int h,
+  ) async {
+    final completer = Completer<ui.Image>();
+    ui.decodeImageFromPixels(
+      pixels,
+      w,
+      h,
+      ui.PixelFormat.rgba8888,
+      completer.complete,
+    );
+    return completer.future;
   }
 }

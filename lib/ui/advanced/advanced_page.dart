@@ -129,22 +129,36 @@ class _AdvancedPageState extends State<AdvancedPage> {
                 color: const Color(0xFFEEF2FF),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.center_focus_strong_rounded, size: 20, color: Color(0xFF3B82F6)),
+              child: const Icon(
+                Icons.center_focus_strong_rounded,
+                size: 20,
+                color: Color(0xFF3B82F6),
+              ),
             ),
             const SizedBox(width: 14),
             const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('专注模式', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1A1D26))),
+                  Text(
+                    '专注模式',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A1D26),
+                    ),
+                  ),
                   SizedBox(height: 2),
-                  Text('除活动窗口外，其余区域变暗', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+                  Text(
+                    '除活动窗口外，其余区域变暗',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+                  ),
                 ],
               ),
             ),
             Switch(
               value: _focus.enabled,
-              activeColor: const Color(0xFF3B82F6),
+              activeThumbColor: const Color(0xFF3B82F6),
               onChanged: (v) {
                 setState(() {
                   _focus.enabled = v;
@@ -200,22 +214,36 @@ class _AdvancedPageState extends State<AdvancedPage> {
                 color: const Color(0xFFFFF7ED),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.flashlight_on_rounded, size: 20, color: Color(0xFFF97316)),
+              child: const Icon(
+                Icons.flashlight_on_rounded,
+                size: 20,
+                color: Color(0xFFF97316),
+              ),
             ),
             const SizedBox(width: 14),
             const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('聚光灯', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1A1D26))),
+                  Text(
+                    '聚光灯',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A1D26),
+                    ),
+                  ),
                   SizedBox(height: 2),
-                  Text('鼠标周围亮圈，其余区域变暗', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+                  Text(
+                    '鼠标周围亮圈，其余区域变暗',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+                  ),
                 ],
               ),
             ),
             Switch(
               value: _spotlight.enabled,
-              activeColor: const Color(0xFFF97316),
+              activeThumbColor: const Color(0xFFF97316),
               onChanged: (v) {
                 setState(() {
                   _spotlight.enabled = v;
@@ -289,22 +317,36 @@ class _AdvancedPageState extends State<AdvancedPage> {
                   color: const Color(0xFFECFDF5),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.crop_free_rounded, size: 20, color: Color(0xFF10B981)),
+                child: const Icon(
+                  Icons.crop_free_rounded,
+                  size: 20,
+                  color: Color(0xFF10B981),
+                ),
               ),
               const SizedBox(width: 14),
               const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('区域遮罩', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1A1D26))),
+                    Text(
+                      '区域遮罩',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A1D26),
+                      ),
+                    ),
                     SizedBox(height: 2),
-                    Text('滤镜仅在指定区域内生效', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+                    Text(
+                      '滤镜仅在指定区域内生效',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+                    ),
                   ],
                 ),
               ),
               Switch(
                 value: _regionMask.enabled,
-                activeColor: const Color(0xFF10B981),
+                activeThumbColor: const Color(0xFF10B981),
                 onChanged: (v) {
                   setState(() => _regionMask.enabled = v);
                   widget.onRegionMaskChanged(_regionMask);
@@ -330,15 +372,28 @@ class _AdvancedPageState extends State<AdvancedPage> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                const Text('反转模式', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF4B5563))),
+                const Text(
+                  '反转模式',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF4B5563),
+                  ),
+                ),
                 const SizedBox(width: 8),
-                const Text('(滤镜在区域外生效)', style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+                const Text(
+                  '(滤镜在区域外生效)',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
+                ),
               ],
             ),
             const SizedBox(height: 14),
             // 区域列表
             if (_regionMask.regions.isNotEmpty) ...[
-              ...List.generate(_regionMask.regions.length, (i) => _buildRegionRow(i)),
+              ...List.generate(
+                _regionMask.regions.length,
+                (i) => _buildRegionRow(i),
+              ),
               const SizedBox(height: 10),
             ],
             // 快捷区域按钮
@@ -346,11 +401,31 @@ class _AdvancedPageState extends State<AdvancedPage> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _quickRegionBtn('左半屏', Icons.vertical_split_outlined, () => _addQuickRegion(_leftHalf)),
-                _quickRegionBtn('右半屏', Icons.vertical_split_outlined, () => _addQuickRegion(_rightHalf)),
-                _quickRegionBtn('上半屏', Icons.horizontal_split_outlined, () => _addQuickRegion(_topHalf)),
-                _quickRegionBtn('下半屏', Icons.horizontal_split_outlined, () => _addQuickRegion(_bottomHalf)),
-                _quickRegionBtn('前台窗口', Icons.picture_in_picture_alt, _captureWindowRegion),
+                _quickRegionBtn(
+                  '左半屏',
+                  Icons.vertical_split_outlined,
+                  () => _addQuickRegion(_leftHalf),
+                ),
+                _quickRegionBtn(
+                  '右半屏',
+                  Icons.vertical_split_outlined,
+                  () => _addQuickRegion(_rightHalf),
+                ),
+                _quickRegionBtn(
+                  '上半屏',
+                  Icons.horizontal_split_outlined,
+                  () => _addQuickRegion(_topHalf),
+                ),
+                _quickRegionBtn(
+                  '下半屏',
+                  Icons.horizontal_split_outlined,
+                  () => _addQuickRegion(_bottomHalf),
+                ),
+                _quickRegionBtn(
+                  '前台窗口',
+                  Icons.picture_in_picture_alt,
+                  _captureWindowRegion,
+                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -364,7 +439,9 @@ class _AdvancedPageState extends State<AdvancedPage> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF10B981),
                   side: const BorderSide(color: Color(0xFF10B981)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                 ),
               ),
@@ -397,14 +474,21 @@ class _AdvancedPageState extends State<AdvancedPage> {
           Expanded(
             child: GestureDetector(
               onTap: () => _renameRegion(index),
-              child: Text(region.name,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: region.enabled ? const Color(0xFF1A1D26) : const Color(0xFF9CA3AF),
-                  )),
+              child: Text(
+                region.name,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: region.enabled
+                      ? const Color(0xFF1A1D26)
+                      : const Color(0xFF9CA3AF),
+                ),
+              ),
             ),
           ),
-          Text('${region.points.length} 点', style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
+          Text(
+            '${region.points.length} 点',
+            style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
+          ),
           const SizedBox(width: 8),
           GestureDetector(
             onTap: () {
@@ -413,7 +497,11 @@ class _AdvancedPageState extends State<AdvancedPage> {
             },
             child: const Padding(
               padding: EdgeInsets.all(4),
-              child: Icon(Icons.close_rounded, size: 16, color: Color(0xFF9CA3AF)),
+              child: Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: Color(0xFF9CA3AF),
+              ),
             ),
           ),
         ],
@@ -436,17 +524,44 @@ class _AdvancedPageState extends State<AdvancedPage> {
           children: [
             Icon(icon, size: 14, color: const Color(0xFF10B981)),
             const SizedBox(width: 4),
-            Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Color(0xFF059669))),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF059669),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  List<Offset> _leftHalf(Size s) => [Offset.zero, Offset(s.width / 2, 0), Offset(s.width / 2, s.height), Offset(0, s.height)];
-  List<Offset> _rightHalf(Size s) => [Offset(s.width / 2, 0), Offset(s.width, 0), Offset(s.width, s.height), Offset(s.width / 2, s.height)];
-  List<Offset> _topHalf(Size s) => [Offset.zero, Offset(s.width, 0), Offset(s.width, s.height / 2), Offset(0, s.height / 2)];
-  List<Offset> _bottomHalf(Size s) => [Offset(0, s.height / 2), Offset(s.width, s.height / 2), Offset(s.width, s.height), Offset(0, s.height)];
+  List<Offset> _leftHalf(Size s) => [
+    Offset.zero,
+    Offset(s.width / 2, 0),
+    Offset(s.width / 2, s.height),
+    Offset(0, s.height),
+  ];
+  List<Offset> _rightHalf(Size s) => [
+    Offset(s.width / 2, 0),
+    Offset(s.width, 0),
+    Offset(s.width, s.height),
+    Offset(s.width / 2, s.height),
+  ];
+  List<Offset> _topHalf(Size s) => [
+    Offset.zero,
+    Offset(s.width, 0),
+    Offset(s.width, s.height / 2),
+    Offset(0, s.height / 2),
+  ];
+  List<Offset> _bottomHalf(Size s) => [
+    Offset(0, s.height / 2),
+    Offset(s.width, s.height / 2),
+    Offset(s.width, s.height),
+    Offset(0, s.height),
+  ];
 
   void _addQuickRegion(List<Offset> Function(Size) pointsBuilder) {
     final screenSize = MediaQuery.of(context).size;
@@ -480,14 +595,19 @@ class _AdvancedPageState extends State<AdvancedPage> {
   }
 
   void _renameRegion(int index) {
-    final controller = TextEditingController(text: _regionMask.regions[index].name);
+    final controller = TextEditingController(
+      text: _regionMask.regions[index].name,
+    );
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('重命名区域'),
         content: TextField(controller: controller, autofocus: true),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
           TextButton(
             onPressed: () {
               final newName = controller.text.trim();
@@ -523,22 +643,36 @@ class _AdvancedPageState extends State<AdvancedPage> {
                   color: const Color(0xFFF0FDF4),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.auto_awesome_rounded, size: 20, color: Color(0xFF22C55E)),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 20,
+                  color: Color(0xFF22C55E),
+                ),
               ),
               const SizedBox(width: 14),
               const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('进程绑定预设', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1A1D26))),
+                    Text(
+                      '进程绑定预设',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A1D26),
+                      ),
+                    ),
                     SizedBox(height: 2),
-                    Text('当指定程序在前台时自动切换滤镜', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+                    Text(
+                      '当指定程序在前台时自动切换滤镜',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+                    ),
                   ],
                 ),
               ),
               Switch(
                 value: _automationEnabled,
-                activeColor: const Color(0xFF22C55E),
+                activeThumbColor: const Color(0xFF22C55E),
                 onChanged: (v) {
                   setState(() => _automationEnabled = v);
                   widget.onAutomationEnabledChanged(v);
@@ -557,16 +691,28 @@ class _AdvancedPageState extends State<AdvancedPage> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.terminal_rounded, size: 14, color: Color(0xFF6B7280)),
+                  const Icon(
+                    Icons.terminal_rounded,
+                    size: 14,
+                    color: Color(0xFF6B7280),
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     '当前前台: $_currentForegroundProcess',
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280), fontFamily: 'Consolas'),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF6B7280),
+                      fontFamily: 'Consolas',
+                    ),
                   ),
                   const SizedBox(width: 6),
                   GestureDetector(
                     onTap: _detectCurrentProcess,
-                    child: const Icon(Icons.refresh, size: 14, color: Color(0xFF9CA3AF)),
+                    child: const Icon(
+                      Icons.refresh,
+                      size: 14,
+                      color: Color(0xFF9CA3AF),
+                    ),
                   ),
                 ],
               ),
@@ -586,7 +732,9 @@ class _AdvancedPageState extends State<AdvancedPage> {
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFF3B82F6),
                 side: const BorderSide(color: Color(0xFFD1D5DB)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
                 padding: const EdgeInsets.symmetric(vertical: 10),
               ),
               icon: const Icon(Icons.add_rounded, size: 18),
@@ -607,7 +755,9 @@ class _AdvancedPageState extends State<AdvancedPage> {
         color: rule.enabled ? const Color(0xFFF0FDF4) : const Color(0xFFFAFAFB),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: rule.enabled ? const Color(0xFF86EFAC) : const Color(0xFFE5E7EB),
+          color: rule.enabled
+              ? const Color(0xFF86EFAC)
+              : const Color(0xFFE5E7EB),
         ),
       ),
       child: Row(
@@ -620,18 +770,29 @@ class _AdvancedPageState extends State<AdvancedPage> {
             child: Icon(
               rule.enabled ? Icons.check_circle_rounded : Icons.circle_outlined,
               size: 20,
-              color: rule.enabled ? const Color(0xFF22C55E) : const Color(0xFF9CA3AF),
+              color: rule.enabled
+                  ? const Color(0xFF22C55E)
+                  : const Color(0xFF9CA3AF),
             ),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               rule.processName,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, fontFamily: 'Consolas', color: Color(0xFF1A1D26)),
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                fontFamily: 'Consolas',
+                color: Color(0xFF1A1D26),
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const Icon(Icons.arrow_forward_rounded, size: 16, color: Color(0xFF9CA3AF)),
+          const Icon(
+            Icons.arrow_forward_rounded,
+            size: 16,
+            color: Color(0xFF9CA3AF),
+          ),
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -641,7 +802,11 @@ class _AdvancedPageState extends State<AdvancedPage> {
             ),
             child: Text(
               rule.presetName,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF3B82F6)),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF3B82F6),
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -650,7 +815,11 @@ class _AdvancedPageState extends State<AdvancedPage> {
               setState(() => _rules.removeAt(index));
               widget.onAutomationRulesChanged(_rules);
             },
-            child: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF9CA3AF)),
+            child: const Icon(
+              Icons.close_rounded,
+              size: 18,
+              color: Color(0xFF9CA3AF),
+            ),
           ),
         ],
       ),
@@ -658,83 +827,128 @@ class _AdvancedPageState extends State<AdvancedPage> {
   }
 
   void _addRule() {
-    final processCtrl = TextEditingController(text: _currentForegroundProcess ?? '');
+    final processCtrl = TextEditingController(
+      text: _currentForegroundProcess ?? '',
+    );
     String selectedPreset = kBasicFilterPresets.first.name;
 
     showDialog(
       context: context,
       builder: (ctx) {
-        return StatefulBuilder(builder: (_, setDialogState) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text('添加自动化规则', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            content: SizedBox(
-              width: 320,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('进程名称', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: processCtrl,
-                    decoration: InputDecoration(
-                      hintText: '例如: chrome.exe',
-                      hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
-                      isDense: true,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    ),
-                    style: const TextStyle(fontSize: 13, fontFamily: 'Consolas'),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('切换到预设', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<String>(
-                    value: selectedPreset,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    ),
-                    items: kBasicFilterPresets.map((p) => DropdownMenuItem(
-                      value: p.name,
-                      child: Text(p.name, style: const TextStyle(fontSize: 13)),
-                    )).toList(),
-                    onChanged: (v) {
-                      if (v != null) setDialogState(() => selectedPreset = v);
-                    },
-                  ),
-                ],
+        return StatefulBuilder(
+          builder: (_, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('取消', style: TextStyle(color: Color(0xFF9CA3AF))),
+              title: const Text(
+                '添加自动化规则',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B82F6),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              content: SizedBox(
+                width: 320,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '进程名称',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: processCtrl,
+                      decoration: InputDecoration(
+                        hintText: '例如: chrome.exe',
+                        hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
+                        isDense: true,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontFamily: 'Consolas',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      '切换到预设',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                    ),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedPreset,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                      items: kBasicFilterPresets
+                          .map(
+                            (p) => DropdownMenuItem(
+                              value: p.name,
+                              child: Text(
+                                p.name,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) setDialogState(() => selectedPreset = v);
+                      },
+                    ),
+                  ],
                 ),
-                onPressed: () {
-                  final name = processCtrl.text.trim();
-                  if (name.isNotEmpty) {
-                    setState(() {
-                      _rules.add(AutomationRule(processName: name, presetName: selectedPreset));
-                    });
-                    widget.onAutomationRulesChanged(_rules);
-                  }
-                  Navigator.of(ctx).pop();
-                },
-                child: const Text('添加'),
               ),
-            ],
-          );
-        });
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text(
+                    '取消',
+                    style: TextStyle(color: Color(0xFF9CA3AF)),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3B82F6),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: () {
+                    final name = processCtrl.text.trim();
+                    if (name.isNotEmpty) {
+                      setState(() {
+                        _rules.add(
+                          AutomationRule(
+                            processName: name,
+                            presetName: selectedPreset,
+                          ),
+                        );
+                      });
+                      widget.onAutomationRulesChanged(_rules);
+                    }
+                    Navigator.of(ctx).pop();
+                  },
+                  child: const Text('添加'),
+                ),
+              ],
+            );
+          },
+        );
       },
     );
   }
@@ -757,16 +971,30 @@ class _AdvancedPageState extends State<AdvancedPage> {
                   color: const Color(0xFFF5F3FF),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.import_export_rounded, size: 20, color: Color(0xFF7C3AED)),
+                child: const Icon(
+                  Icons.import_export_rounded,
+                  size: 20,
+                  color: Color(0xFF7C3AED),
+                ),
               ),
               const SizedBox(width: 14),
               const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('配置导入导出', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1A1D26))),
+                    Text(
+                      '配置导入导出',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A1D26),
+                      ),
+                    ),
                     SizedBox(height: 2),
-                    Text('导出或导入滤镜配置，跨设备同步', style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF))),
+                    Text(
+                      '导出或导入滤镜配置，跨设备同步',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+                    ),
                   ],
                 ),
               ),
@@ -780,11 +1008,16 @@ class _AdvancedPageState extends State<AdvancedPage> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF7C3AED),
                     side: const BorderSide(color: Color(0xFF7C3AED)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   icon: const Icon(Icons.file_upload_outlined, size: 18),
-                  label: const Text('导出配置', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  label: const Text(
+                    '导出配置',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
                   onPressed: _exportConfig,
                 ),
               ),
@@ -794,11 +1027,16 @@ class _AdvancedPageState extends State<AdvancedPage> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF3B82F6),
                     side: const BorderSide(color: Color(0xFF3B82F6)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   icon: const Icon(Icons.file_download_outlined, size: 18),
-                  label: const Text('导入配置', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                  label: const Text(
+                    '导入配置',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
                   onPressed: _importConfig,
                 ),
               ),
@@ -821,14 +1059,18 @@ class _AdvancedPageState extends State<AdvancedPage> {
         fontFamily: widget.settingsService.getFontFamily(),
         startupEnabled: widget.settingsService.getStartupEnabled(),
         themeMode: widget.settingsService.getThemeMode(),
+        automationEnabled: _automationEnabled,
         focusMode: _focus,
         spotlight: _spotlight,
         regionMask: _regionMask,
         automationRules: _rules,
       );
 
-      final jsonStr = const JsonEncoder.withIndent('  ').convert(config.toJson());
-      final fileName = 'screenfilter_config_${DateTime.now().millisecondsSinceEpoch}.json';
+      final jsonStr = const JsonEncoder.withIndent(
+        '  ',
+      ).convert(config.toJson());
+      final fileName =
+          'screenfilter_config_${DateTime.now().millisecondsSinceEpoch}.json';
 
       final location = await getSaveLocation(
         suggestedName: fileName,
@@ -841,7 +1083,10 @@ class _AdvancedPageState extends State<AdvancedPage> {
         await File(location.path).writeAsString(jsonStr);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('配置已导出'), duration: Duration(seconds: 2)),
+            const SnackBar(
+              content: Text('配置已导出'),
+              duration: Duration(seconds: 2),
+            ),
           );
         }
       }
@@ -861,17 +1106,7 @@ class _AdvancedPageState extends State<AdvancedPage> {
       final json = jsonDecode(content) as Map<String, dynamic>;
       final config = AppConfig.fromJson(json);
 
-      // Apply config
-      await widget.settingsService.saveAll(
-        brightness: config.brightness,
-        alpha: config.alpha,
-        baseColor: config.baseColor,
-        activePreset: config.activePreset,
-        recentColors: config.recentColors,
-      );
-      await widget.settingsService.setFontFamily(config.fontFamily);
-      await widget.settingsService.setStartupEnabled(config.startupEnabled);
-      await widget.settingsService.setThemeMode(config.themeMode);
+      await widget.settingsService.saveAppConfig(config);
 
       // Update local state
       setState(() {
@@ -879,29 +1114,31 @@ class _AdvancedPageState extends State<AdvancedPage> {
         _spotlight = config.spotlight;
         _regionMask = config.regionMask;
         _rules = config.automationRules;
+        _automationEnabled = config.automationEnabled;
       });
       widget.onFocusModeChanged(_focus);
       widget.onSpotlightChanged(_spotlight);
       widget.onRegionMaskChanged(_regionMask);
       widget.onAutomationRulesChanged(_rules);
-
-      // Save advanced settings
-      await widget.settingsService.setFocusModeConfig(_focus);
-      await widget.settingsService.setSpotlightConfig(_spotlight);
-      await widget.settingsService.setRegionMaskConfig(_regionMask);
-      await widget.settingsService.setAutomationRules(_rules);
+      widget.onAutomationEnabledChanged(_automationEnabled);
 
       widget.onConfigImported?.call(config);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('配置已导入'), duration: Duration(seconds: 2)),
+          const SnackBar(
+            content: Text('配置已导入'),
+            duration: Duration(seconds: 2),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导入失败: $e'), duration: const Duration(seconds: 3)),
+          SnackBar(
+            content: Text('导入失败: $e'),
+            duration: const Duration(seconds: 3),
+          ),
         );
       }
     } finally {
@@ -921,13 +1158,24 @@ class _AdvancedPageState extends State<AdvancedPage> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFEEEFF2)),
         boxShadow: const [
-          BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 2)),
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF1A1D26))),
+          Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+              color: Color(0xFF1A1D26),
+            ),
+          ),
           const SizedBox(height: 16),
           child,
         ],
@@ -946,7 +1194,10 @@ class _AdvancedPageState extends State<AdvancedPage> {
       children: [
         SizedBox(
           width: 36,
-          child: Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+          ),
         ),
         Expanded(
           child: SliderTheme(
@@ -963,7 +1214,12 @@ class _AdvancedPageState extends State<AdvancedPage> {
           width: 40,
           child: Text(
             value.toStringAsFixed(value == value.roundToDouble() ? 0 : 1),
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF3B82F6), fontFamily: 'Consolas'),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF3B82F6),
+              fontFamily: 'Consolas',
+            ),
             textAlign: TextAlign.right,
           ),
         ),

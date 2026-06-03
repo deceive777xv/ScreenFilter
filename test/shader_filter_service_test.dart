@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -60,29 +61,23 @@ void main() {
     service.init();
     service.updateScreenSize(const Size(100, 80));
     service.updateDevicePixelRatio(2.0);
-    service.updateRegionMask(RegionMaskConfig(
-      enabled: true,
-      regions: [
-        MaskRegion(
-          id: 'a',
-          points: const [
-            Offset(1, 2),
-            Offset(3, 4),
-            Offset(5, 6),
-          ],
-        ),
-        MaskRegion(
-          id: 'disabled',
-          enabled: false,
-          points: const [
-            Offset(10, 10),
-            Offset(20, 10),
-            Offset(10, 20),
-          ],
-        ),
-      ],
-      inverted: true,
-    ));
+    service.updateRegionMask(
+      RegionMaskConfig(
+        enabled: true,
+        regions: [
+          MaskRegion(
+            id: 'a',
+            points: const [Offset(1, 2), Offset(3, 4), Offset(5, 6)],
+          ),
+          MaskRegion(
+            id: 'disabled',
+            enabled: false,
+            points: const [Offset(10, 10), Offset(20, 10), Offset(10, 20)],
+          ),
+        ],
+        inverted: true,
+      ),
+    );
 
     expect(engine.lastMaskEnabled, isTrue);
     expect(engine.lastMaskInverted, isTrue);
@@ -91,6 +86,73 @@ void main() {
     expect(engine.lastMaskCounts, [3]);
     expect(engine.lastMaskPoints, [2.0, 4.0, 6.0, 8.0, 10.0, 12.0]);
   });
+
+  testWidgets('disposes replaced and stopped fallback images', (tester) async {
+    final engine = _FakeDX11ShaderEngine()
+      ..overlayCanStart = false
+      ..nextFramePixels = _solidRgbaPixel(0xFF);
+    final decodedImages = <ui.Image>[
+      (await tester.runAsync<ui.Image>(() => createTestImage(cache: false)))!,
+      (await tester.runAsync<ui.Image>(() => createTestImage(cache: false)))!,
+    ];
+    var decodeIndex = 0;
+    final service = ShaderFilterService(
+      engine: engine,
+      decodePixels: (_, _, _) async => decodedImages[decodeIndex++],
+    );
+
+    service.init();
+    service.compileShader('float4 main() : SV_TARGET { return 1; }');
+    service.updateScreenSize(const Size(1, 1));
+    service.applyFilter(FilterApplyMode.static, const Size(1, 1), Colors.white);
+
+    expect(engine.renderFrameCalls, 1);
+    final firstImage = await _waitForFilterImage(tester, service);
+    expect(firstImage.debugDisposed, isFalse);
+
+    engine.nextFramePixels = _solidRgbaPixel(0x80);
+    service.renderFullscreenFilterFrame(
+      time: 1,
+      mouseX: 0.5,
+      mouseY: 0.5,
+      accentColor: Colors.white,
+    );
+
+    final secondImage = await _waitForFilterImage(
+      tester,
+      service,
+      previous: firstImage,
+    );
+    expect(firstImage.debugDisposed, isTrue);
+    expect(secondImage.debugDisposed, isFalse);
+
+    service.stopFilter();
+    expect(service.filterImageNotifier.value, isNull);
+    expect(secondImage.debugDisposed, isTrue);
+  });
+}
+
+Uint8List _solidRgbaPixel(int alpha) => Uint8List.fromList([255, 0, 0, alpha]);
+
+Future<ui.Image> _waitForFilterImage(
+  WidgetTester tester,
+  ShaderFilterService service, {
+  ui.Image? previous,
+}) async {
+  final image = await tester.runAsync<ui.Image?>(() async {
+    for (var i = 0; i < 20; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final image = service.filterImageNotifier.value;
+      if (image != null && image != previous) {
+        return image;
+      }
+    }
+    return null;
+  });
+  if (image != null) {
+    return image;
+  }
+  fail('Timed out waiting for filter image');
 }
 
 class _FakeDX11ShaderEngine implements DX11ShaderEngine {
@@ -99,6 +161,8 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
   int renderOverlayFrameCalls = 0;
   int renderFrameCalls = 0;
   bool overlayActive = false;
+  bool overlayCanStart = true;
+  Uint8List? nextFramePixels;
   bool? lastMaskEnabled;
   bool? lastMaskInverted;
   int? lastMaskWidth;
@@ -134,7 +198,7 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
   @override
   Uint8List? renderFrame(int width, int height) {
     renderFrameCalls++;
-    return null;
+    return nextFramePixels;
   }
 
   @override
@@ -162,10 +226,7 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
   }
 
   @override
-  void setFilterVisuals({
-    required double opacity,
-    required double brightness,
-  }) {
+  void setFilterVisuals({required double opacity, required double brightness}) {
     lastOpacity = opacity;
     lastBrightness = brightness;
   }
@@ -185,7 +246,7 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
 
   @override
   bool showOverlay(int width, int height) {
-    overlayActive = true;
-    return true;
+    overlayActive = overlayCanStart;
+    return overlayCanStart;
   }
 }
