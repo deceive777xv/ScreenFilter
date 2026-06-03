@@ -1,7 +1,6 @@
-import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import '../../services/win32_helpers.dart';
+import '../../services/win32_polling_service.dart';
 
 /// 聚光灯覆盖层 — 鼠标周围亮圈，其余区域变暗。
 class SpotlightOverlay extends StatefulWidget {
@@ -10,10 +9,12 @@ class SpotlightOverlay extends StatefulWidget {
   final double dimOpacity;
   final double softEdge;
   final double devicePixelRatio;
+  final Win32PollingService win32PollingService;
 
   const SpotlightOverlay({
     super.key,
     required this.enabled,
+    required this.win32PollingService,
     this.radius = 200.0,
     this.dimOpacity = 0.6,
     this.softEdge = 50.0,
@@ -25,7 +26,7 @@ class SpotlightOverlay extends StatefulWidget {
 }
 
 class _SpotlightOverlayState extends State<SpotlightOverlay> {
-  Timer? _timer;
+  Win32PollingRelease? _pollingRelease;
   Offset _mousePos = Offset.zero;
 
   @override
@@ -37,7 +38,9 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
   @override
   void didUpdateWidget(SpotlightOverlay old) {
     super.didUpdateWidget(old);
-    if (widget.enabled && !old.enabled) {
+    if (widget.enabled &&
+        (!old.enabled ||
+            old.win32PollingService != widget.win32PollingService)) {
       _startTracking();
     } else if (!widget.enabled && old.enabled) {
       _stopTracking();
@@ -46,23 +49,27 @@ class _SpotlightOverlayState extends State<SpotlightOverlay> {
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _pollingRelease?.call();
     super.dispose();
   }
 
   void _startTracking() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(milliseconds: 16), (_) {
-      final pos = getGlobalCursorPos();
-      if (pos != _mousePos) {
-        setState(() => _mousePos = pos);
-      }
-    });
+    _pollingRelease?.call();
+    _pollingRelease = widget.win32PollingService.addCursorPositionListener(
+      _onCursorPositionChanged,
+    );
+    _onCursorPositionChanged();
   }
 
   void _stopTracking() {
-    _timer?.cancel();
-    _timer = null;
+    _pollingRelease?.call();
+    _pollingRelease = null;
+  }
+
+  void _onCursorPositionChanged() {
+    final pos = widget.win32PollingService.cursorPosition.value;
+    if (!mounted || pos == _mousePos) return;
+    setState(() => _mousePos = pos);
   }
 
   @override

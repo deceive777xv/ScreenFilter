@@ -127,7 +127,7 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     if (screenSize == Size.zero) return;
 
     if (_service.isNativeOverlayActive) {
-      final mouse = _service.getGlobalMouseNormalized();
+      final mouse = _service.cachedGlobalMouseNormalized;
       _service.renderFullscreenFilterFrame(
         time: _elapsedTime,
         mouseX: mouse.dx,
@@ -140,7 +140,7 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     final renderSize = _service.filterRenderSize;
     final w = renderSize.width.toInt();
     final h = renderSize.height.toInt();
-    final mouse = _service.getGlobalMouseNormalized();
+    final mouse = _service.cachedGlobalMouseNormalized;
     final pixels = _service.renderFrame(
       width: w,
       height: h,

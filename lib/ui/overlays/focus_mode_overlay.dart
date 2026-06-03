@@ -1,6 +1,5 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../services/win32_helpers.dart';
+import '../../services/win32_polling_service.dart';
 
 /// 专注模式覆盖层 — 除当前活动窗口外，其余区域变暗。
 class FocusModeOverlay extends StatefulWidget {
@@ -8,10 +7,12 @@ class FocusModeOverlay extends StatefulWidget {
   final double dimOpacity;
   final double borderRadius;
   final double devicePixelRatio;
+  final Win32PollingService win32PollingService;
 
   const FocusModeOverlay({
     super.key,
     required this.enabled,
+    required this.win32PollingService,
     this.dimOpacity = 0.5,
     this.borderRadius = 8.0,
     this.devicePixelRatio = 1.0,
@@ -22,7 +23,7 @@ class FocusModeOverlay extends StatefulWidget {
 }
 
 class _FocusModeOverlayState extends State<FocusModeOverlay> {
-  Timer? _timer;
+  Win32PollingRelease? _pollingRelease;
   Rect? _windowRect;
 
   @override
@@ -34,7 +35,9 @@ class _FocusModeOverlayState extends State<FocusModeOverlay> {
   @override
   void didUpdateWidget(FocusModeOverlay old) {
     super.didUpdateWidget(old);
-    if (widget.enabled && !old.enabled) {
+    if (widget.enabled &&
+        (!old.enabled ||
+            old.win32PollingService != widget.win32PollingService)) {
       _startTracking();
     } else if (!widget.enabled && old.enabled) {
       _stopTracking();
@@ -43,24 +46,27 @@ class _FocusModeOverlayState extends State<FocusModeOverlay> {
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _pollingRelease?.call();
     super.dispose();
   }
 
   void _startTracking() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(milliseconds: 50), (_) {
-      final rect = getForegroundWindowRect();
-      if (rect != _windowRect) {
-        setState(() => _windowRect = rect);
-      }
-    });
+    _pollingRelease?.call();
+    _pollingRelease = widget.win32PollingService
+        .addForegroundWindowRectListener(_onForegroundWindowRectChanged);
+    _onForegroundWindowRectChanged();
   }
 
   void _stopTracking() {
-    _timer?.cancel();
-    _timer = null;
+    _pollingRelease?.call();
+    _pollingRelease = null;
     _windowRect = null;
+  }
+
+  void _onForegroundWindowRectChanged() {
+    final rect = widget.win32PollingService.foregroundWindowRect.value;
+    if (!mounted || rect == _windowRect) return;
+    setState(() => _windowRect = rect);
   }
 
   @override

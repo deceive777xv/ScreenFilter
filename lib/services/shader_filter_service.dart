@@ -1,27 +1,10 @@
 import 'dart:async';
-import 'dart:ffi' hide Size;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import '../models/advanced_config.dart';
 import 'dx11_shader_ffi.dart';
-
-// Win32 GetCursorPos via FFI for global mouse position.
-final _user32 = DynamicLibrary.open('user32.dll');
-
-final class _POINT extends Struct {
-  @Int32()
-  external int x;
-  @Int32()
-  external int y;
-}
-
-typedef _GetCursorPosC = Int32 Function(Pointer<_POINT>);
-typedef _GetCursorPosDart = int Function(Pointer<_POINT>);
-final _getCursorPos = _user32.lookupFunction<_GetCursorPosC, _GetCursorPosDart>(
-  'GetCursorPos',
-);
+import 'win32_polling_service.dart';
 
 /// Filter apply mode.
 enum FilterApplyMode { none, static, dynamic }
@@ -38,11 +21,16 @@ class ShaderFilterService {
   ShaderFilterService({
     DX11ShaderEngine? engine,
     FilterImageDecoder? decodePixels,
+    Win32PollingService? win32PollingService,
   }) : _engine = engine ?? DX11ShaderEngine(),
-       _decodePixelsToImage = decodePixels ?? _defaultDecodePixels;
+       _decodePixelsToImage = decodePixels ?? _defaultDecodePixels,
+       _win32PollingService = win32PollingService ?? Win32PollingService(),
+       _ownsWin32PollingService = win32PollingService == null;
 
   final DX11ShaderEngine _engine;
   final FilterImageDecoder _decodePixelsToImage;
+  final Win32PollingService _win32PollingService;
+  final bool _ownsWin32PollingService;
   bool _engineReady = false;
   bool _shaderCompiled = false;
   bool _nativeOverlayActive = false;
@@ -58,6 +46,7 @@ class ShaderFilterService {
 
   FilterApplyMode _mode = FilterApplyMode.none;
   Timer? _filterTimer;
+  Win32PollingRelease? _cursorPollingRelease;
   final Stopwatch _stopwatch = Stopwatch();
 
   // Render state for filter
@@ -109,11 +98,15 @@ class ShaderFilterService {
 
   void dispose() {
     _filterTimer?.cancel();
+    _stopCursorPolling();
     _stopwatch.stop();
     _replaceFilterImage(null);
     _engine.hideOverlay();
     _engine.dispose();
     filterImageNotifier.dispose();
+    if (_ownsWin32PollingService) {
+      _win32PollingService.dispose();
+    }
   }
 
   // ── Compilation ──────────────────────────────────────────────
@@ -199,20 +192,12 @@ class ShaderFilterService {
 
   /// Read global mouse position, normalized to 0..1 based on screen size.
   Offset getGlobalMouseNormalized() {
-    final pt = calloc<_POINT>();
-    try {
-      _getCursorPos(pt);
-      if (_screenSize == Size.zero) return const Offset(0.5, 0.5);
-      // GetCursorPos returns physical screen coordinates, so normalize against
-      // the same physical render size used by the fullscreen shader image.
-      final renderSize = filterRenderSize;
-      return Offset(
-        (pt.ref.x / renderSize.width).clamp(0.0, 1.0),
-        (pt.ref.y / renderSize.height).clamp(0.0, 1.0),
-      );
-    } finally {
-      calloc.free(pt);
-    }
+    final cursorPosition = _win32PollingService.refreshCursorPosition();
+    return _normalizeGlobalMouse(cursorPosition);
+  }
+
+  Offset get cachedGlobalMouseNormalized {
+    return _normalizeGlobalMouse(_win32PollingService.cursorPosition.value);
   }
 
   /// Apply the current compiled shader as fullscreen filter.
@@ -229,10 +214,18 @@ class ShaderFilterService {
     _filterTimer = null;
 
     if (newMode == FilterApplyMode.none) {
+      _stopCursorPolling();
       _replaceFilterImage(null);
       _nativeOverlayActive = false;
       _engine.hideOverlay();
       return;
+    }
+
+    if (newMode == FilterApplyMode.dynamic) {
+      _startCursorPolling();
+    } else {
+      _stopCursorPolling();
+      _win32PollingService.refreshCursorPosition();
     }
 
     _nativeOverlayActive = _tryStartNativeOverlay();
@@ -258,6 +251,7 @@ class ShaderFilterService {
     _mode = FilterApplyMode.none;
     _filterTimer?.cancel();
     _filterTimer = null;
+    _stopCursorPolling();
     _replaceFilterImage(null);
     _nativeOverlayActive = false;
     _engine.hideOverlay();
@@ -297,7 +291,7 @@ class ShaderFilterService {
     if (_screenSize == Size.zero) return;
 
     final time = _stopwatch.elapsedMilliseconds / 1000.0;
-    final mouse = getGlobalMouseNormalized();
+    final mouse = cachedGlobalMouseNormalized;
 
     renderFullscreenFilterFrame(
       time: time,
@@ -479,6 +473,24 @@ class ShaderFilterService {
   int _toPhysicalPixels(double logicalPixels) {
     final pixels = (logicalPixels * _dpr).round();
     return pixels < 1 ? 1 : pixels;
+  }
+
+  Offset _normalizeGlobalMouse(Offset cursorPosition) {
+    if (_screenSize == Size.zero) return const Offset(0.5, 0.5);
+    final renderSize = filterRenderSize;
+    return Offset(
+      (cursorPosition.dx / renderSize.width).clamp(0.0, 1.0),
+      (cursorPosition.dy / renderSize.height).clamp(0.0, 1.0),
+    );
+  }
+
+  void _startCursorPolling() {
+    _cursorPollingRelease ??= _win32PollingService.retainCursorPolling();
+  }
+
+  void _stopCursorPolling() {
+    _cursorPollingRelease?.call();
+    _cursorPollingRelease = null;
   }
 
   Future<void> _decodePixels(Uint8List pixels, int w, int h) async {

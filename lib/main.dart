@@ -18,7 +18,7 @@ import 'models/filter_preset.dart';
 import 'services/settings_service.dart';
 import 'services/shader_filter_service.dart';
 import 'services/tray_menu_layout.dart';
-import 'services/win32_helpers.dart';
+import 'services/win32_polling_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -119,6 +119,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   bool _systemTrayReady = false;
 
   // 沙盒自定义滤镜
+  late final Win32PollingService _win32PollingService;
   late final ShaderFilterService _shaderFilterService;
 
   // 顶层组件
@@ -132,7 +133,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   late RegionMaskConfig _regionMaskConfig;
   late List<AutomationRule> _automationRules;
   late bool _automationEnabled;
-  Timer? _automationTimer;
+  Win32PollingRelease? _automationPollingRelease;
   String? _lastMatchedPreset;
   bool _isDrawingRegion = false;
   Color? _lastTrayBaseColor;
@@ -161,8 +162,11 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     _automationRules = _settings.getAutomationRules();
     _automationEnabled = _settings.getAutomationEnabled();
 
-    // Init shader filter service
-    _shaderFilterService = ShaderFilterService();
+    // Init Win32 polling and shader filter services
+    _win32PollingService = Win32PollingService();
+    _shaderFilterService = ShaderFilterService(
+      win32PollingService: _win32PollingService,
+    );
     _shaderFilterService.init();
     _shaderFilterService.modeNotifier.addListener(_onSandboxModeChanged);
 
@@ -189,9 +193,10 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
 
   @override
   void dispose() {
-    _automationTimer?.cancel();
+    _automationPollingRelease?.call();
     _shaderFilterService.modeNotifier.removeListener(_onSandboxModeChanged);
     _shaderFilterService.dispose();
+    _win32PollingService.dispose();
     _systemTray.destroy();
     super.dispose();
   }
@@ -494,21 +499,24 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   }
 
   void _startAutomation() {
-    _automationTimer?.cancel();
-    _automationTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      _checkAutomationRules();
-    });
+    _automationPollingRelease?.call();
+    _automationPollingRelease = _win32PollingService
+        .addForegroundProcessNameListener(() {
+          _checkAutomationRules(
+            _win32PollingService.foregroundProcessName.value,
+          );
+        });
+    _checkAutomationRules(_win32PollingService.foregroundProcessName.value);
   }
 
   void _stopAutomation() {
-    _automationTimer?.cancel();
-    _automationTimer = null;
+    _automationPollingRelease?.call();
+    _automationPollingRelease = null;
     _lastMatchedPreset = null;
   }
 
-  void _checkAutomationRules() {
+  void _checkAutomationRules(String? processName) {
     if (!_automationEnabled || _automationRules.isEmpty) return;
-    final processName = getForegroundProcessName();
     if (processName == null) return;
 
     final lowerProcess = processName.toLowerCase();
@@ -625,6 +633,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
             ignoring: true,
             child: FocusModeOverlay(
               enabled: _focusModeConfig.enabled,
+              win32PollingService: _win32PollingService,
               dimOpacity: _focusModeConfig.dimOpacity,
               borderRadius: _focusModeConfig.borderRadius,
               devicePixelRatio: dpr,
@@ -635,6 +644,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
             ignoring: true,
             child: SpotlightOverlay(
               enabled: _spotlightConfig.enabled,
+              win32PollingService: _win32PollingService,
               radius: _spotlightConfig.radius,
               dimOpacity: _spotlightConfig.dimOpacity,
               softEdge: _spotlightConfig.softEdge,
