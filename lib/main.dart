@@ -18,6 +18,7 @@ import 'models/filter_preset.dart';
 import 'services/automation_preset_controller.dart';
 import 'services/debounced_action.dart';
 import 'services/filter_overlay_logic.dart';
+import 'services/keyed_debounced_action.dart';
 import 'services/settings_service.dart';
 import 'services/shader_filter_service.dart';
 import 'services/tray_menu_layout.dart';
@@ -144,6 +145,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   double? _lastTrayBrightness;
   late final DebouncedAction _basicFilterPersistDebouncer;
   late final DebouncedAction _trayMenuRefreshDebouncer;
+  late final KeyedDebouncedAction<String> _settingsPersistDebouncer;
   TrayMenuState? _lastAppliedTrayMenuState;
 
   SettingsService get _settings => widget.settingsService;
@@ -172,6 +174,9 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     );
     _trayMenuRefreshDebouncer = DebouncedAction(
       delay: const Duration(milliseconds: 120),
+    );
+    _settingsPersistDebouncer = KeyedDebouncedAction<String>(
+      delay: const Duration(milliseconds: 250),
     );
     _automationPresetController = AutomationPresetController(
       captureCurrentFilter: _captureBasicFilterSnapshot,
@@ -211,6 +216,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   @override
   void dispose() {
     _basicFilterPersistDebouncer.flush();
+    _settingsPersistDebouncer.flush();
     _trayMenuRefreshDebouncer.dispose();
     _automationPollingRelease?.call();
     _shaderFilterService.modeNotifier.removeListener(_onSandboxModeChanged);
@@ -218,6 +224,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     _win32PollingService.dispose();
     _systemTray.destroy();
     _basicFilterPersistDebouncer.dispose();
+    _settingsPersistDebouncer.dispose();
     super.dispose();
   }
 
@@ -395,9 +402,9 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
         _focusModeConfig = _focusModeConfig.copyWith(enabled: false);
       }
     });
-    _settings.setSpotlightConfig(_spotlightConfig);
+    _scheduleSpotlightConfigPersist();
     if (nextEnabled) {
-      _settings.setFocusModeConfig(_focusModeConfig);
+      _scheduleFocusModeConfigPersist();
     }
     _scheduleTrayMenuRefresh();
   }
@@ -452,6 +459,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
 
   void _exitFromTray() {
     _basicFilterPersistDebouncer.flush();
+    _settingsPersistDebouncer.flush();
     _shaderFilterService.dispose();
     _systemTray.destroy();
     exit(0);
@@ -459,26 +467,26 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
 
   void _onOverlayChanged(OverlayComponent component) {
     setState(() {});
-    _settings.setOverlayComponent(component);
+    _scheduleOverlayComponentPersist(component);
   }
 
   // ── 高级功能回调 ──────────────────────────────────────────────
 
   void _onFocusModeChanged(FocusModeConfig config) {
     setState(() => _focusModeConfig = config);
-    _settings.setFocusModeConfig(config);
+    _scheduleFocusModeConfigPersist();
     _scheduleTrayMenuRefresh();
   }
 
   void _onSpotlightChanged(SpotlightConfig config) {
     setState(() => _spotlightConfig = config);
-    _settings.setSpotlightConfig(config);
+    _scheduleSpotlightConfigPersist();
     _scheduleTrayMenuRefresh();
   }
 
   void _onRegionMaskChanged(RegionMaskConfig config) {
     setState(() => _regionMaskConfig = config);
-    _settings.setRegionMaskConfig(config);
+    _scheduleRegionMaskConfigPersist();
     _shaderFilterService.updateRegionMask(config);
   }
 
@@ -502,7 +510,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       _regionMaskConfig.regions = [..._regionMaskConfig.regions, newRegion];
       _isPanelOpen = true;
     });
-    _settings.setRegionMaskConfig(_regionMaskConfig);
+    _scheduleRegionMaskConfigPersist();
     _shaderFilterService.updateRegionMask(_regionMaskConfig);
     _scheduleTrayMenuRefresh();
   }
@@ -645,6 +653,30 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     ]);
   }
 
+  void _scheduleOverlayComponentPersist(OverlayComponent component) {
+    _settingsPersistDebouncer.schedule('overlay:${component.type.name}', () {
+      unawaited(_settings.setOverlayComponent(component));
+    });
+  }
+
+  void _scheduleFocusModeConfigPersist() {
+    _settingsPersistDebouncer.schedule('advanced:focus', () {
+      unawaited(_settings.setFocusModeConfig(_focusModeConfig));
+    });
+  }
+
+  void _scheduleSpotlightConfigPersist() {
+    _settingsPersistDebouncer.schedule('advanced:spotlight', () {
+      unawaited(_settings.setSpotlightConfig(_spotlightConfig));
+    });
+  }
+
+  void _scheduleRegionMaskConfigPersist() {
+    _settingsPersistDebouncer.schedule('advanced:region-mask', () {
+      unawaited(_settings.setRegionMaskConfig(_regionMaskConfig));
+    });
+  }
+
   // ── Build ─────────────────────────────────────────────────────
 
   @override
@@ -737,7 +769,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
                     draggable: _isPanelOpen,
                     onPositionChanged: (pos) {
                       setState(() => _clockComponent.position = pos);
-                      _settings.setOverlayComponent(_clockComponent);
+                      _scheduleOverlayComponentPersist(_clockComponent);
                     },
                   ),
                   SloganOverlay(
@@ -745,7 +777,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
                     draggable: _isPanelOpen,
                     onPositionChanged: (pos) {
                       setState(() => _sloganComponent.position = pos);
-                      _settings.setOverlayComponent(_sloganComponent);
+                      _scheduleOverlayComponentPersist(_sloganComponent);
                     },
                   ),
                   WatermarkOverlay(
@@ -753,7 +785,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
                     draggable: _isPanelOpen,
                     onPositionChanged: (pos) {
                       setState(() => _watermarkComponent.position = pos);
-                      _settings.setOverlayComponent(_watermarkComponent);
+                      _scheduleOverlayComponentPersist(_watermarkComponent);
                     },
                   ),
                 ],

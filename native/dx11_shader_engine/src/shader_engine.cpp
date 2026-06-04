@@ -47,6 +47,9 @@ static int                     g_overlayX      = 0;
 static int                     g_overlayY      = 0;
 static int                     g_overlayWindowWidth = 0;
 static int                     g_overlayWindowHeight = 0;
+static HWND                    g_cachedFlutterWindow = nullptr;
+static ULONGLONG               g_lastFlutterWindowSearchTick = 0;
+static ULONGLONG               g_lastOverlayPositionTick = 0;
 static float                   g_filterOpacity = 1.0f;
 static float                   g_filterBrightness = 0.0f;
 static bool                    g_maskEnabled  = false;
@@ -55,6 +58,8 @@ static int32_t                 g_maskWidth    = 0;
 static int32_t                 g_maskHeight   = 0;
 static constexpr const wchar_t* kOverlayWindowClassName =
     L"SCREEN_FILTER_DX11_OVERLAY_WINDOW";
+static constexpr ULONGLONG kFlutterWindowSearchIntervalMs = 2000;
+static constexpr ULONGLONG kOverlayPositionIntervalMs = 100;
 
 // ── Constant buffer layout (must match the HLSL cbuffer) ────────────────────
 struct alignas(16) ShaderUniforms {
@@ -265,6 +270,9 @@ static void ReleaseOverlayResources() {
         g_overlayWindow = nullptr;
     }
     g_overlayBoundsValid = false;
+    g_cachedFlutterWindow = nullptr;
+    g_lastFlutterWindowSearchTick = 0;
+    g_lastOverlayPositionTick = 0;
 }
 
 static LRESULT CALLBACK OverlayWndProc(
@@ -329,14 +337,41 @@ static HWND FindFlutterWindow() {
     return data.window;
 }
 
-static void PositionOverlayWindow(int32_t width, int32_t height) {
+static HWND FindFlutterWindowCached(bool force) {
+    const ULONGLONG now = GetTickCount64();
+    if (!force && g_cachedFlutterWindow && IsWindow(g_cachedFlutterWindow)) {
+        return g_cachedFlutterWindow;
+    }
+    if (!force &&
+        now - g_lastFlutterWindowSearchTick < kFlutterWindowSearchIntervalMs) {
+        return g_cachedFlutterWindow;
+    }
+
+    g_lastFlutterWindowSearchTick = now;
+    g_cachedFlutterWindow = FindFlutterWindow();
+    return g_cachedFlutterWindow;
+}
+
+static void PositionOverlayWindow(
+    int32_t width,
+    int32_t height,
+    bool force = false
+) {
     if (!g_overlayWindow) return;
+
+    const ULONGLONG now = GetTickCount64();
+    if (!force &&
+        g_overlayBoundsValid &&
+        now - g_lastOverlayPositionTick < kOverlayPositionIntervalMs) {
+        return;
+    }
+    g_lastOverlayPositionTick = now;
 
     int x = 0;
     int y = 0;
     int w = width;
     int h = height;
-    HWND flutterWindow = FindFlutterWindow();
+    HWND flutterWindow = FindFlutterWindowCached(force);
     if (flutterWindow) {
         RECT rect = {};
         if (GetWindowRect(flutterWindow, &rect)) {
@@ -396,7 +431,7 @@ static bool CreateOverlayWindow(int32_t width, int32_t height) {
     if (!g_overlayWindow) return false;
 
     ShowWindow(g_overlayWindow, SW_SHOWNOACTIVATE);
-    PositionOverlayWindow(width, height);
+    PositionOverlayWindow(width, height, true);
     return true;
 }
 
@@ -494,7 +529,7 @@ static bool EnsureOverlay(int32_t width, int32_t height) {
     if (!EnsureCompositionTarget()) return false;
 
     if (!g_overlaySwapChain || width != g_overlayWidth || height != g_overlayHeight) {
-        PositionOverlayWindow(width, height);
+        PositionOverlayWindow(width, height, true);
         return CreateOverlaySwapChain(width, height);
     }
     PositionOverlayWindow(width, height);

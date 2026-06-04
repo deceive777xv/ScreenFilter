@@ -128,6 +128,40 @@ void main() {
     service.stopFilter();
   });
 
+  test('skips fallback uniform updates while throttled', () {
+    final engine = _FakeDX11ShaderEngine()
+      ..overlayCanStart = false
+      ..nextFramePixels = null;
+    final service = ShaderFilterService(
+      engine: engine,
+      fallbackFrameInterval: const Duration(milliseconds: 66),
+    );
+
+    service.init();
+    service.compileShader('float4 main() : SV_TARGET { return 1; }');
+    service.updateScreenSize(const Size(1, 1));
+    service.applyFilter(
+      FilterApplyMode.dynamic,
+      const Size(1, 1),
+      Colors.white,
+    );
+    service.pauseOwnTimer();
+
+    expect(engine.renderFrameCalls, 1);
+    expect(engine.setUniformCalls, 1);
+
+    service.renderFullscreenFilterFrame(
+      time: 0.03,
+      mouseX: 0.5,
+      mouseY: 0.5,
+      accentColor: Colors.white,
+    );
+
+    expect(engine.renderFrameCalls, 1);
+    expect(engine.setUniformCalls, 1);
+    service.stopFilter();
+  });
+
   testWidgets('disposes replaced and stopped fallback images', (tester) async {
     final engine = _FakeDX11ShaderEngine()
       ..overlayCanStart = false
@@ -201,6 +235,7 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
   double? lastBrightness;
   int renderOverlayFrameCalls = 0;
   int renderFrameCalls = 0;
+  int setUniformCalls = 0;
   bool overlayActive = false;
   bool overlayCanStart = true;
   Uint8List? nextFramePixels;
@@ -283,7 +318,9 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
     double accentG = 1,
     double accentB = 1,
     double accentA = 1,
-  }) {}
+  }) {
+    setUniformCalls++;
+  }
 
   @override
   bool showOverlay(int width, int height) {

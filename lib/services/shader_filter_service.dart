@@ -323,6 +323,8 @@ class ShaderFilterService {
     _lastFullscreenMouseY = mouseY;
     _lastFullscreenAccentColor = accentColor;
 
+    if (!_nativeOverlayActive && _shouldSkipFallbackFrame(time)) return;
+
     _setUniforms(
       time: time,
       width: w,
@@ -341,7 +343,6 @@ class ShaderFilterService {
       _engine.hideOverlay();
     }
 
-    if (_shouldSkipFallbackFrame(time)) return;
     _lastFallbackFrameTime = time;
     final pixels = _engine.renderFrame(w, h);
     if (pixels != null) {

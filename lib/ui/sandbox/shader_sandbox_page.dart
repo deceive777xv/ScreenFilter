@@ -126,33 +126,13 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     final screenSize = _service.screenSize;
     if (screenSize == Size.zero) return;
 
-    if (_service.isNativeOverlayActive) {
-      final mouse = _service.cachedGlobalMouseNormalized;
-      _service.renderFullscreenFilterFrame(
-        time: _elapsedTime,
-        mouseX: mouse.dx,
-        mouseY: mouse.dy,
-        accentColor: _accentColor,
-      );
-      return;
-    }
-
-    final renderSize = _service.filterRenderSize;
-    final w = renderSize.width.toInt();
-    final h = renderSize.height.toInt();
     final mouse = _service.cachedGlobalMouseNormalized;
-    final pixels = _service.renderFrame(
-      width: w,
-      height: h,
+    _service.renderFullscreenFilterFrame(
       time: _elapsedTime,
       mouseX: mouse.dx,
       mouseY: mouse.dy,
       accentColor: _accentColor,
     );
-
-    if (pixels != null) {
-      _createFilterImage(pixels, w, h);
-    }
   }
 
   Future<void> _createPreviewImage(Uint8List pixels, int w, int h) async {
