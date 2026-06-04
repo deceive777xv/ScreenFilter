@@ -28,6 +28,9 @@ test/*
 !test/settings_service_test.dart
 !test/tray_menu_layout_test.dart
 !test/win32_polling_service_test.dart
+!test/debounced_action_test.dart
+!test/filter_overlay_logic_test.dart
+!test/config_import_notifier_test.dart
 img_temp/
 script.ps1
 

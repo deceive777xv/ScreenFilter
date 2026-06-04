@@ -21,6 +21,17 @@ class TrayMenuState {
     required this.filterEnabled,
     required this.spotlightEnabled,
   });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TrayMenuState &&
+          other.panelOpen == panelOpen &&
+          other.filterEnabled == filterEnabled &&
+          other.spotlightEnabled == spotlightEnabled;
+
+  @override
+  int get hashCode => Object.hash(panelOpen, filterEnabled, spotlightEnabled);
 }
 
 class TrayMenuEntry {

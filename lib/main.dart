@@ -15,6 +15,8 @@ import 'ui/overlays/region_mask_drawing_overlay.dart';
 import 'models/overlay_component.dart';
 import 'models/advanced_config.dart';
 import 'models/filter_preset.dart';
+import 'services/debounced_action.dart';
+import 'services/filter_overlay_logic.dart';
 import 'services/settings_service.dart';
 import 'services/shader_filter_service.dart';
 import 'services/tray_menu_layout.dart';
@@ -139,6 +141,9 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   Color? _lastTrayBaseColor;
   double? _lastTrayAlpha;
   double? _lastTrayBrightness;
+  late final DebouncedAction _basicFilterPersistDebouncer;
+  late final DebouncedAction _trayMenuRefreshDebouncer;
+  TrayMenuState? _lastAppliedTrayMenuState;
 
   SettingsService get _settings => widget.settingsService;
 
@@ -161,6 +166,12 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     _regionMaskConfig = _settings.getRegionMaskConfig();
     _automationRules = _settings.getAutomationRules();
     _automationEnabled = _settings.getAutomationEnabled();
+    _basicFilterPersistDebouncer = DebouncedAction(
+      delay: const Duration(milliseconds: 250),
+    );
+    _trayMenuRefreshDebouncer = DebouncedAction(
+      delay: const Duration(milliseconds: 120),
+    );
 
     // Init Win32 polling and shader filter services
     _win32PollingService = Win32PollingService();
@@ -188,16 +199,19 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       );
     }
     setState(() {});
-    unawaited(_refreshTrayMenu());
+    _scheduleTrayMenuRefresh();
   }
 
   @override
   void dispose() {
+    _basicFilterPersistDebouncer.flush();
+    _trayMenuRefreshDebouncer.dispose();
     _automationPollingRelease?.call();
     _shaderFilterService.modeNotifier.removeListener(_onSandboxModeChanged);
     _shaderFilterService.dispose();
     _win32PollingService.dispose();
     _systemTray.destroy();
+    _basicFilterPersistDebouncer.dispose();
     super.dispose();
   }
 
@@ -225,7 +239,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
         toolTip: '滤镜 - 点击打开设置',
       );
 
-      await _setTrayContextMenu();
+      await _setTrayContextMenu(force: true);
       _systemTrayReady = true;
 
       _systemTray.registerSystemTrayEventHandler((eventName) async {
@@ -248,7 +262,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       setState(() => _isPanelOpen = true);
       await windowManager.setIgnoreMouseEvents(false);
     }
-    unawaited(_refreshTrayMenu());
+    _scheduleTrayMenuRefresh();
   }
 
   bool get _baseFilterEnabled =>
@@ -263,22 +277,32 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   );
 
   Future<void> _showTrayMenu() async {
-    await _setTrayContextMenu();
+    await _setTrayContextMenu(force: true);
     await _systemTray.popUpContextMenu();
   }
 
-  Future<void> _refreshTrayMenu() async {
+  void _scheduleTrayMenuRefresh() {
     if (!_systemTrayReady) return;
-    await _setTrayContextMenu();
+    _trayMenuRefreshDebouncer.schedule(() {
+      unawaited(_refreshTrayMenu());
+    });
   }
 
-  Future<void> _setTrayContextMenu() async {
+  Future<void> _refreshTrayMenu({bool force = false}) async {
+    if (!_systemTrayReady) return;
+    await _setTrayContextMenu(force: force);
+  }
+
+  Future<void> _setTrayContextMenu({bool force = false}) async {
     try {
+      final state = _trayMenuState;
+      if (!force && state == _lastAppliedTrayMenuState) return;
       final menu = Menu();
       await menu.buildFrom(
-        _buildNativeTrayMenuItems(buildTrayMenuEntries(_trayMenuState)),
+        _buildNativeTrayMenuItems(buildTrayMenuEntries(state)),
       );
       await _systemTray.setContextMenu(menu);
+      _lastAppliedTrayMenuState = state;
     } catch (e) {
       debugPrint('Tray Menu Error: $e');
     }
@@ -336,7 +360,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       case null:
         break;
     }
-    unawaited(_refreshTrayMenu());
+    _scheduleTrayMenuRefresh();
   }
 
   void _toggleTrayFilter() {
@@ -369,6 +393,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     if (nextEnabled) {
       _settings.setFocusModeConfig(_focusModeConfig);
     }
+    _scheduleTrayMenuRefresh();
   }
 
   void _clearTrayFilter({required bool rememberCurrent}) {
@@ -409,10 +434,10 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       _alpha = alpha;
       _brightness = brightness;
     });
-    _settings.setBaseColor(baseColor);
-    _settings.setAlpha(alpha);
-    _settings.setBrightness(brightness);
-    _settings.setActivePreset(activePreset);
+    _persistBasicFilterNow(
+      activePreset: activePreset,
+      includeActivePreset: true,
+    );
     _shaderFilterService.updateFilterVisuals(
       opacity: _alpha,
       brightness: _brightness,
@@ -420,6 +445,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   }
 
   void _exitFromTray() {
+    _basicFilterPersistDebouncer.flush();
     _shaderFilterService.dispose();
     _systemTray.destroy();
     exit(0);
@@ -435,13 +461,13 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   void _onFocusModeChanged(FocusModeConfig config) {
     setState(() => _focusModeConfig = config);
     _settings.setFocusModeConfig(config);
-    unawaited(_refreshTrayMenu());
+    _scheduleTrayMenuRefresh();
   }
 
   void _onSpotlightChanged(SpotlightConfig config) {
     setState(() => _spotlightConfig = config);
     _settings.setSpotlightConfig(config);
-    unawaited(_refreshTrayMenu());
+    _scheduleTrayMenuRefresh();
   }
 
   void _onRegionMaskChanged(RegionMaskConfig config) {
@@ -456,7 +482,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       _isPanelOpen = false;
     });
     windowManager.setIgnoreMouseEvents(false);
-    unawaited(_refreshTrayMenu());
+    _scheduleTrayMenuRefresh();
   }
 
   void _onDrawingComplete(List<Offset> polygon) {
@@ -472,7 +498,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     });
     _settings.setRegionMaskConfig(_regionMaskConfig);
     _shaderFilterService.updateRegionMask(_regionMaskConfig);
-    unawaited(_refreshTrayMenu());
+    _scheduleTrayMenuRefresh();
   }
 
   void _onDrawingCancel() {
@@ -480,7 +506,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       _isDrawingRegion = false;
       _isPanelOpen = true;
     });
-    unawaited(_refreshTrayMenu());
+    _scheduleTrayMenuRefresh();
   }
 
   void _onAutomationRulesChanged(List<AutomationRule> rules) {
@@ -546,7 +572,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     if (match.alpha.abs() > 0.001 || match.brightness.abs() > 0.001) {
       _rememberCurrentBaseFilter();
     }
-    unawaited(_refreshTrayMenu());
+    _scheduleTrayMenuRefresh();
   }
 
   void _onConfigImported(AppConfig config) {
@@ -567,7 +593,38 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     } else {
       _stopAutomation();
     }
-    unawaited(_refreshTrayMenu());
+    _scheduleTrayMenuRefresh();
+  }
+
+  void _persistBasicFilterNow({
+    String? activePreset,
+    bool includeActivePreset = false,
+  }) {
+    _basicFilterPersistDebouncer.cancel();
+    unawaited(
+      _saveBasicFilter(
+        activePreset: activePreset,
+        includeActivePreset: includeActivePreset,
+      ),
+    );
+  }
+
+  void _scheduleBasicFilterPersist() {
+    _basicFilterPersistDebouncer.schedule(() {
+      unawaited(_saveBasicFilter());
+    });
+  }
+
+  Future<void> _saveBasicFilter({
+    String? activePreset,
+    bool includeActivePreset = false,
+  }) async {
+    await Future.wait([
+      _settings.setBaseColor(_baseColor),
+      _settings.setAlpha(_alpha),
+      _settings.setBrightness(_brightness),
+      if (includeActivePreset) _settings.setActivePreset(activePreset),
+    ]);
   }
 
   // ── Build ─────────────────────────────────────────────────────
@@ -709,11 +766,15 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   }
 
   Widget _buildShaderFilter() {
-    if (_shader == null) return const SizedBox();
-
     final sandboxActive = _shaderFilterService.mode != FilterApplyMode.none;
     // 当沙盒/特效激活时，GLSL层全透明无需渲染，直接跳过以避免干扰DX11叠加层
-    if (sandboxActive) return const SizedBox();
+    if (!shouldPaintBaseShader(
+      shaderLoaded: _shader != null,
+      sandboxActive: sandboxActive,
+      baseFilterEnabled: _baseFilterEnabled,
+    )) {
+      return const SizedBox();
+    }
 
     return Builder(
       builder: (context) {
@@ -761,34 +822,34 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       onConfigImported: _onConfigImported,
       onBrightnessChanged: (v) {
         setState(() => _brightness = v);
-        _settings.setBrightness(v);
+        _scheduleBasicFilterPersist();
         _shaderFilterService.updateFilterVisuals(
           opacity: _alpha,
           brightness: _brightness,
         );
         _rememberCurrentBaseFilter();
-        unawaited(_refreshTrayMenu());
+        _scheduleTrayMenuRefresh();
       },
       onAlphaChanged: (v) {
         setState(() => _alpha = v);
-        _settings.setAlpha(v);
+        _scheduleBasicFilterPersist();
         _shaderFilterService.updateFilterVisuals(
           opacity: _alpha,
           brightness: _brightness,
         );
         _rememberCurrentBaseFilter();
-        unawaited(_refreshTrayMenu());
+        _scheduleTrayMenuRefresh();
       },
       onBaseColorChanged: (c) {
         setState(() => _baseColor = c);
-        _settings.setBaseColor(c);
+        _persistBasicFilterNow();
         if (_shaderFilterService.mode != FilterApplyMode.none) {
           _shaderFilterService.stopFilter();
         } else if (_shaderFilterService.filterImageNotifier.value != null) {
           _shaderFilterService.filterImageNotifier.value = null;
         }
         _rememberCurrentBaseFilter();
-        unawaited(_refreshTrayMenu());
+        _scheduleTrayMenuRefresh();
       },
       onClose: _togglePanel,
       onFontFamilyChanged: widget.onFontFamilyChanged,

@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:window_manager/window_manager.dart';
 import '../../models/advanced_config.dart';
 import '../../models/filter_preset.dart';
+import '../../services/config_import_notifier.dart';
 import '../../services/settings_service.dart';
 import '../../services/win32_helpers.dart';
 
@@ -1116,13 +1117,15 @@ class _AdvancedPageState extends State<AdvancedPage> {
         _rules = config.automationRules;
         _automationEnabled = config.automationEnabled;
       });
-      widget.onFocusModeChanged(_focus);
-      widget.onSpotlightChanged(_spotlight);
-      widget.onRegionMaskChanged(_regionMask);
-      widget.onAutomationRulesChanged(_rules);
-      widget.onAutomationEnabledChanged(_automationEnabled);
-
-      widget.onConfigImported?.call(config);
+      notifyImportedConfig(
+        config: config,
+        onConfigImported: widget.onConfigImported,
+        onFocusModeChanged: widget.onFocusModeChanged,
+        onSpotlightChanged: widget.onSpotlightChanged,
+        onRegionMaskChanged: widget.onRegionMaskChanged,
+        onAutomationRulesChanged: widget.onAutomationRulesChanged,
+        onAutomationEnabledChanged: widget.onAutomationEnabledChanged,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
