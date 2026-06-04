@@ -32,6 +32,9 @@ test/*
 !test/filter_overlay_logic_test.dart
 !test/config_import_notifier_test.dart
 !test/automation_preset_controller_test.dart
+!test/numeric_value_field_test.dart
+!test/advanced_page_test.dart
+!test/console_hotkey_service_test.dart
 img_temp/
 script.ps1
 

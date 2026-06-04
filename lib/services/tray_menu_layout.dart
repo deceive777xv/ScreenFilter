@@ -2,6 +2,7 @@ enum TrayMenuAction {
   togglePanel,
   toggleFilter,
   toggleSpotlight,
+  toggleHotkey,
   presets,
   applyEyeCarePreset,
   applyNightPreset,
@@ -15,11 +16,13 @@ class TrayMenuState {
   final bool panelOpen;
   final bool filterEnabled;
   final bool spotlightEnabled;
+  final bool hotkeyEnabled;
 
   const TrayMenuState({
     required this.panelOpen,
     required this.filterEnabled,
     required this.spotlightEnabled,
+    required this.hotkeyEnabled,
   });
 
   @override
@@ -28,10 +31,12 @@ class TrayMenuState {
       other is TrayMenuState &&
           other.panelOpen == panelOpen &&
           other.filterEnabled == filterEnabled &&
-          other.spotlightEnabled == spotlightEnabled;
+          other.spotlightEnabled == spotlightEnabled &&
+          other.hotkeyEnabled == hotkeyEnabled;
 
   @override
-  int get hashCode => Object.hash(panelOpen, filterEnabled, spotlightEnabled);
+  int get hashCode =>
+      Object.hash(panelOpen, filterEnabled, spotlightEnabled, hotkeyEnabled);
 }
 
 class TrayMenuEntry {
@@ -96,6 +101,11 @@ List<TrayMenuEntry> buildTrayMenuEntries(TrayMenuState state) {
       label: '聚光灯',
       action: TrayMenuAction.toggleSpotlight,
       checked: state.spotlightEnabled,
+    ),
+    TrayMenuEntry.checkbox(
+      label: '快捷键',
+      action: TrayMenuAction.toggleHotkey,
+      checked: state.hotkeyEnabled,
     ),
     const TrayMenuEntry.separator(),
     const TrayMenuEntry.submenu(

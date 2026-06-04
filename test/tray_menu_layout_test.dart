@@ -8,6 +8,7 @@ void main() {
         panelOpen: false,
         filterEnabled: false,
         spotlightEnabled: false,
+        hotkeyEnabled: true,
       ),
     );
 
@@ -16,6 +17,7 @@ void main() {
       '',
       '滤镜',
       '聚光灯',
+      '快捷键',
       '',
       '常用预设',
       '',
@@ -39,6 +41,7 @@ void main() {
         panelOpen: true,
         filterEnabled: true,
         spotlightEnabled: true,
+        hotkeyEnabled: true,
       ),
     );
 
@@ -51,11 +54,16 @@ void main() {
     final spotlight = entries.firstWhere(
       (entry) => entry.action == TrayMenuAction.toggleSpotlight,
     );
+    final hotkey = entries.firstWhere(
+      (entry) => entry.action == TrayMenuAction.toggleHotkey,
+    );
 
     expect(panel.label, '隐藏面板');
     expect(filter.kind, TrayMenuEntryKind.checkbox);
     expect(filter.checked, isTrue);
     expect(spotlight.kind, TrayMenuEntryKind.checkbox);
     expect(spotlight.checked, isTrue);
+    expect(hotkey.kind, TrayMenuEntryKind.checkbox);
+    expect(hotkey.checked, isTrue);
   });
 }

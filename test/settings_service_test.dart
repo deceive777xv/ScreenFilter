@@ -9,6 +9,10 @@ void main() {
   test('AppConfig preserves automation enabled flag in JSON snapshots', () {
     final config = AppConfig(
       automationEnabled: true,
+      consoleHotkey: const ConsoleHotkeyConfig(
+        enabled: true,
+        presetId: 'ctrl_alt_s',
+      ),
       automationRules: [
         AutomationRule(processName: 'chrome.exe', presetName: '夜间'),
       ],
@@ -17,6 +21,8 @@ void main() {
     final decoded = AppConfig.fromJson(config.toJson());
 
     expect(decoded.automationEnabled, isTrue);
+    expect(decoded.consoleHotkey.enabled, isTrue);
+    expect(decoded.consoleHotkey.presetId, 'ctrl_alt_s');
     expect(decoded.automationRules.single.processName, 'chrome.exe');
   });
 
@@ -31,6 +37,10 @@ void main() {
         baseColor: Colors.black,
         activePreset: '夜间',
         automationEnabled: true,
+        consoleHotkey: const ConsoleHotkeyConfig(
+          enabled: true,
+          presetId: 'alt_f12',
+        ),
         automationRules: [
           AutomationRule(processName: 'code.exe', presetName: '护眼'),
         ],
@@ -44,6 +54,8 @@ void main() {
       expect(settings.getBaseColor(), Colors.black);
       expect(settings.getActivePreset(), '夜间');
       expect(settings.getAutomationEnabled(), isTrue);
+      expect(settings.getConsoleHotkeyConfig().enabled, isTrue);
+      expect(settings.getConsoleHotkeyConfig().presetId, 'alt_f12');
       expect(settings.getAutomationRules().single.processName, 'code.exe');
       expect(settings.getFocusModeConfig().enabled, isTrue);
       expect(settings.getFocusModeConfig().dimOpacity, 0.7);

@@ -193,6 +193,31 @@ class AutomationRule {
   );
 }
 
+/// 控制台快捷键配置
+class ConsoleHotkeyConfig {
+  final bool enabled;
+  final String presetId;
+
+  const ConsoleHotkeyConfig({
+    this.enabled = false,
+    this.presetId = 'ctrl_alt_f',
+  });
+
+  ConsoleHotkeyConfig copyWith({bool? enabled, String? presetId}) =>
+      ConsoleHotkeyConfig(
+        enabled: enabled ?? this.enabled,
+        presetId: presetId ?? this.presetId,
+      );
+
+  Map<String, dynamic> toJson() => {'enabled': enabled, 'presetId': presetId};
+
+  factory ConsoleHotkeyConfig.fromJson(Map<String, dynamic> json) =>
+      ConsoleHotkeyConfig(
+        enabled: json['enabled'] as bool? ?? false,
+        presetId: json['presetId'] as String? ?? 'ctrl_alt_f',
+      );
+}
+
 /// 完整的高级功能配置（用于导入导出）
 class AppConfig {
   final double brightness;
@@ -204,6 +229,7 @@ class AppConfig {
   final bool startupEnabled;
   final String themeMode;
   final bool automationEnabled;
+  final ConsoleHotkeyConfig consoleHotkey;
   final FocusModeConfig focusMode;
   final SpotlightConfig spotlight;
   final RegionMaskConfig regionMask;
@@ -219,6 +245,7 @@ class AppConfig {
     this.startupEnabled = false,
     this.themeMode = 'light',
     this.automationEnabled = false,
+    this.consoleHotkey = const ConsoleHotkeyConfig(),
     this.focusMode = const _DefaultFocusMode(),
     this.spotlight = const _DefaultSpotlight(),
     this.regionMask = const _DefaultRegionMask(),
@@ -238,6 +265,7 @@ class AppConfig {
       'startupEnabled': startupEnabled,
       'themeMode': themeMode,
       'automationEnabled': automationEnabled,
+      'consoleHotkey': consoleHotkey.toJson(),
     },
     'focusMode': focusMode.toJson(),
     'spotlight': spotlight.toJson(),
@@ -257,6 +285,11 @@ class AppConfig {
       startupEnabled: _asBool(settings['startupEnabled']) ?? false,
       themeMode: _asString(settings['themeMode']) ?? 'light',
       automationEnabled: _asBool(settings['automationEnabled']) ?? false,
+      consoleHotkey: _parseConfig(
+        settings['consoleHotkey'],
+        const ConsoleHotkeyConfig(),
+        ConsoleHotkeyConfig.fromJson,
+      ),
       focusMode: _parseConfig(
         json['focusMode'],
         FocusModeConfig(),

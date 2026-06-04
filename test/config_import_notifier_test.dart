@@ -26,6 +26,7 @@ void main() {
         onRegionMaskChanged: (_) => sectionCalls++,
         onAutomationRulesChanged: (_) => sectionCalls++,
         onAutomationEnabledChanged: (_) => sectionCalls++,
+        onConsoleHotkeyChanged: (_) => sectionCalls++,
       );
 
       expect(aggregateCalls, 1);
@@ -50,6 +51,7 @@ void main() {
       var regionCalls = 0;
       var rulesCalls = 0;
       var automationCalls = 0;
+      var hotkeyCalls = 0;
 
       notifyImportedConfig(
         config: config,
@@ -59,6 +61,7 @@ void main() {
         onRegionMaskChanged: (_) => regionCalls++,
         onAutomationRulesChanged: (_) => rulesCalls++,
         onAutomationEnabledChanged: (_) => automationCalls++,
+        onConsoleHotkeyChanged: (_) => hotkeyCalls++,
       );
 
       expect(focusCalls, 1);
@@ -66,6 +69,7 @@ void main() {
       expect(regionCalls, 1);
       expect(rulesCalls, 1);
       expect(automationCalls, 1);
+      expect(hotkeyCalls, 1);
     },
   );
 }

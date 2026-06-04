@@ -122,6 +122,7 @@ class SettingsService {
   static const _keyAutomationRules = 'advanced_automation_rules';
   static const _keyAutomationEnabled = 'advanced_automation_enabled';
   static const _keyRegionMask = 'advanced_region_mask';
+  static const _keyConsoleHotkey = 'advanced_console_hotkey';
 
   FocusModeConfig getFocusModeConfig() {
     final decoded = _decodeMap(_prefs.getString(_keyFocusMode));
@@ -158,6 +159,16 @@ class SettingsService {
 
   bool getAutomationEnabled() => _prefs.getBool(_keyAutomationEnabled) ?? false;
 
+  ConsoleHotkeyConfig getConsoleHotkeyConfig() {
+    final decoded = _decodeMap(_prefs.getString(_keyConsoleHotkey));
+    if (decoded == null) return const ConsoleHotkeyConfig();
+    try {
+      return ConsoleHotkeyConfig.fromJson(decoded);
+    } catch (_) {
+      return const ConsoleHotkeyConfig();
+    }
+  }
+
   Future<void> setFocusModeConfig(FocusModeConfig config) =>
       _prefs.setString(_keyFocusMode, jsonEncode(config.toJson()));
 
@@ -172,6 +183,9 @@ class SettingsService {
 
   Future<void> setAutomationEnabled(bool v) =>
       _prefs.setBool(_keyAutomationEnabled, v);
+
+  Future<void> setConsoleHotkeyConfig(ConsoleHotkeyConfig config) =>
+      _prefs.setString(_keyConsoleHotkey, jsonEncode(config.toJson()));
 
   RegionMaskConfig getRegionMaskConfig() {
     final decoded = _decodeMap(_prefs.getString(_keyRegionMask));
@@ -217,6 +231,7 @@ class SettingsService {
       setStartupEnabled(config.startupEnabled),
       setThemeMode(config.themeMode),
       setAutomationEnabled(config.automationEnabled),
+      setConsoleHotkeyConfig(config.consoleHotkey),
       setFocusModeConfig(config.focusMode),
       setSpotlightConfig(config.spotlight),
       setRegionMaskConfig(config.regionMask),

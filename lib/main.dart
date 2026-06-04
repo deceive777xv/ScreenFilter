@@ -16,6 +16,7 @@ import 'models/overlay_component.dart';
 import 'models/advanced_config.dart';
 import 'models/filter_preset.dart';
 import 'services/automation_preset_controller.dart';
+import 'services/console_hotkey_service.dart';
 import 'services/debounced_action.dart';
 import 'services/filter_overlay_logic.dart';
 import 'services/keyed_debounced_action.dart';
@@ -137,8 +138,10 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   late RegionMaskConfig _regionMaskConfig;
   late List<AutomationRule> _automationRules;
   late bool _automationEnabled;
+  late ConsoleHotkeyConfig _consoleHotkeyConfig;
   Win32PollingRelease? _automationPollingRelease;
   late final AutomationPresetController _automationPresetController;
+  late final ConsoleHotkeyService _consoleHotkeyService;
   bool _isDrawingRegion = false;
   Color? _lastTrayBaseColor;
   double? _lastTrayAlpha;
@@ -169,6 +172,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     _regionMaskConfig = _settings.getRegionMaskConfig();
     _automationRules = _settings.getAutomationRules();
     _automationEnabled = _settings.getAutomationEnabled();
+    _consoleHotkeyConfig = _settings.getConsoleHotkeyConfig();
     _basicFilterPersistDebouncer = DebouncedAction(
       delay: const Duration(milliseconds: 250),
     );
@@ -183,6 +187,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       applyPreset: _applyPresetByName,
       restoreFilter: _restoreBasicFilterSnapshot,
     );
+    _consoleHotkeyService = ConsoleHotkeyService(onPressed: _togglePanel);
 
     // Init Win32 polling and shader filter services
     _win32PollingService = Win32PollingService();
@@ -197,6 +202,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
 
     // Start automation if enabled
     if (_automationEnabled) _startAutomation();
+    unawaited(_consoleHotkeyService.apply(_consoleHotkeyConfig));
   }
 
   void _onSandboxModeChanged() {
@@ -219,6 +225,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     _settingsPersistDebouncer.flush();
     _trayMenuRefreshDebouncer.dispose();
     _automationPollingRelease?.call();
+    unawaited(_consoleHotkeyService.dispose());
     _shaderFilterService.modeNotifier.removeListener(_onSandboxModeChanged);
     _shaderFilterService.dispose();
     _win32PollingService.dispose();
@@ -287,6 +294,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     panelOpen: _isPanelOpen,
     filterEnabled: _filterEnabled,
     spotlightEnabled: _spotlightConfig.enabled,
+    hotkeyEnabled: _consoleHotkeyConfig.enabled,
   );
 
   Future<void> _showTrayMenu() async {
@@ -357,6 +365,9 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       case TrayMenuAction.toggleSpotlight:
         _toggleTraySpotlight();
         break;
+      case TrayMenuAction.toggleHotkey:
+        _toggleTrayHotkey();
+        break;
       case TrayMenuAction.applyEyeCarePreset:
         _applyPresetByName('护眼');
         break;
@@ -407,6 +418,12 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       _scheduleFocusModeConfigPersist();
     }
     _scheduleTrayMenuRefresh();
+  }
+
+  void _toggleTrayHotkey() {
+    _onConsoleHotkeyChanged(
+      _consoleHotkeyConfig.copyWith(enabled: !_consoleHotkeyConfig.enabled),
+    );
   }
 
   void _clearTrayFilter({required bool rememberCurrent}) {
@@ -460,6 +477,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   void _exitFromTray() {
     _basicFilterPersistDebouncer.flush();
     _settingsPersistDebouncer.flush();
+    unawaited(_consoleHotkeyService.dispose());
     _shaderFilterService.dispose();
     _systemTray.destroy();
     exit(0);
@@ -541,6 +559,13 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     }
   }
 
+  void _onConsoleHotkeyChanged(ConsoleHotkeyConfig config) {
+    setState(() => _consoleHotkeyConfig = config);
+    _settings.setConsoleHotkeyConfig(config);
+    unawaited(_consoleHotkeyService.apply(config));
+    _scheduleTrayMenuRefresh();
+  }
+
   void _startAutomation() {
     _automationPollingRelease?.call();
     _automationPollingRelease = _win32PollingService
@@ -592,8 +617,10 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       _regionMaskConfig = config.regionMask;
       _automationRules = config.automationRules;
       _automationEnabled = config.automationEnabled;
+      _consoleHotkeyConfig = config.consoleHotkey;
     });
     _shaderFilterService.updateRegionMask(_regionMaskConfig);
+    unawaited(_consoleHotkeyService.apply(_consoleHotkeyConfig));
     _automationPresetController.reset(restore: false);
     if (_automationEnabled) {
       _startAutomation();
@@ -869,8 +896,10 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       spotlightConfig: _spotlightConfig,
       automationRules: _automationRules,
       automationEnabled: _automationEnabled,
+      consoleHotkeyConfig: _consoleHotkeyConfig,
       onFocusModeChanged: _onFocusModeChanged,
       onSpotlightChanged: _onSpotlightChanged,
+      onConsoleHotkeyChanged: _onConsoleHotkeyChanged,
       regionMaskConfig: _regionMaskConfig,
       onRegionMaskChanged: _onRegionMaskChanged,
       onStartDrawingRegion: _startDrawingRegion,

@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_hsvcolor_picker/flutter_hsvcolor_picker.dart'
     as hsv_lib;
 import 'package:file_selector/file_selector.dart';
 import 'package:window_manager/window_manager.dart';
 import 'color_picker/color_picker_panel.dart';
+import 'widgets/numeric_value_field.dart';
 import 'widgets/screen_position_picker.dart';
 import '../models/filter_preset.dart';
 import '../models/overlay_component.dart';
@@ -36,8 +36,10 @@ class ConsolePanel extends StatefulWidget {
   final SpotlightConfig spotlightConfig;
   final List<AutomationRule> automationRules;
   final bool automationEnabled;
+  final ConsoleHotkeyConfig consoleHotkeyConfig;
   final ValueChanged<FocusModeConfig> onFocusModeChanged;
   final ValueChanged<SpotlightConfig> onSpotlightChanged;
+  final ValueChanged<ConsoleHotkeyConfig> onConsoleHotkeyChanged;
   final RegionMaskConfig regionMaskConfig;
   final ValueChanged<RegionMaskConfig> onRegionMaskChanged;
   final VoidCallback onStartDrawingRegion;
@@ -66,8 +68,10 @@ class ConsolePanel extends StatefulWidget {
     required this.spotlightConfig,
     required this.automationRules,
     required this.automationEnabled,
+    required this.consoleHotkeyConfig,
     required this.onFocusModeChanged,
     required this.onSpotlightChanged,
+    required this.onConsoleHotkeyChanged,
     required this.regionMaskConfig,
     required this.onRegionMaskChanged,
     required this.onStartDrawingRegion,
@@ -487,8 +491,10 @@ class _ConsolePanelState extends State<ConsolePanel> {
           regionMaskConfig: widget.regionMaskConfig,
           automationRules: widget.automationRules,
           automationEnabled: widget.automationEnabled,
+          consoleHotkeyConfig: widget.consoleHotkeyConfig,
           onFocusModeChanged: widget.onFocusModeChanged,
           onSpotlightChanged: widget.onSpotlightChanged,
+          onConsoleHotkeyChanged: widget.onConsoleHotkeyChanged,
           onRegionMaskChanged: widget.onRegionMaskChanged,
           onStartDrawingRegion: widget.onStartDrawingRegion,
           onAutomationRulesChanged: widget.onAutomationRulesChanged,
@@ -1308,13 +1314,19 @@ class _ConsolePanelState extends State<ConsolePanel> {
                 ),
               ),
               const Spacer(),
-              Text(
-                value.toStringAsFixed(2),
-                style: const TextStyle(
+              NumericValueField(
+                value: value,
+                min: min,
+                max: max,
+                fractionDigits: 2,
+                width: 62,
+                label: label,
+                textStyle: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF3B82F6),
                 ),
+                onChanged: onChanged,
               ),
             ],
           ),
@@ -1479,7 +1491,6 @@ class _ConsolePanelState extends State<ConsolePanel> {
     required bool isInt,
     required ValueChanged<double> onChanged,
   }) {
-    final displayText = isInt ? '${value.round()}' : value.toStringAsFixed(2);
     return Row(
       children: [
         SizedBox(
@@ -1489,92 +1500,19 @@ class _ConsolePanelState extends State<ConsolePanel> {
         Expanded(
           child: Slider(value: value, min: min, max: max, onChanged: onChanged),
         ),
-        GestureDetector(
-          onTap: () {
-            final ctrl = TextEditingController(text: displayText);
-            showDialog(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                title: Text(
-                  '输入$label',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                content: TextField(
-                  controller: ctrl,
-                  autofocus: true,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
-                  ],
-                  decoration: InputDecoration(
-                    hintText:
-                        '${min.toStringAsFixed(isInt ? 0 : 2)} - ${max.toStringAsFixed(isInt ? 0 : 2)}',
-                    isDense: true,
-                    border: const OutlineInputBorder(),
-                  ),
-                  onSubmitted: (v) {
-                    final parsed = double.tryParse(v);
-                    if (parsed != null) {
-                      onChanged(parsed.clamp(min, max));
-                    }
-                    Navigator.pop(ctx);
-                  },
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text(
-                      '取消',
-                      style: TextStyle(color: Color(0xFF9CA3AF)),
-                    ),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3B82F6),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    onPressed: () {
-                      final parsed = double.tryParse(ctrl.text);
-                      if (parsed != null) {
-                        onChanged(parsed.clamp(min, max));
-                      }
-                      Navigator.pop(ctx);
-                    },
-                    child: const Text('确定'),
-                  ),
-                ],
-              ),
-            );
-          },
-          child: Container(
-            width: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-            ),
-            child: Text(
-              displayText,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF1A1D26),
-                fontFamily: 'Consolas',
-              ),
-              textAlign: TextAlign.center,
-            ),
+        NumericValueField(
+          value: value,
+          min: min,
+          max: max,
+          fractionDigits: isInt ? 0 : 2,
+          width: 54,
+          label: label,
+          textStyle: const TextStyle(
+            fontSize: 12,
+            color: Color(0xFF1A1D26),
+            fontFamily: 'Consolas',
           ),
+          onChanged: onChanged,
         ),
       ],
     );

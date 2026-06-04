@@ -8,6 +8,7 @@ void notifyImportedConfig({
   required void Function(RegionMaskConfig config) onRegionMaskChanged,
   required void Function(List<AutomationRule> rules) onAutomationRulesChanged,
   required void Function(bool enabled) onAutomationEnabledChanged,
+  required void Function(ConsoleHotkeyConfig config) onConsoleHotkeyChanged,
 }) {
   final aggregateCallback = onConfigImported;
   if (aggregateCallback != null) {
@@ -20,4 +21,5 @@ void notifyImportedConfig({
   onRegionMaskChanged(config.regionMask);
   onAutomationRulesChanged(config.automationRules);
   onAutomationEnabledChanged(config.automationEnabled);
+  onConsoleHotkeyChanged(config.consoleHotkey);
 }

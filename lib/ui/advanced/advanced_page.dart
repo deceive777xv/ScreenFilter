@@ -5,9 +5,11 @@ import 'package:file_selector/file_selector.dart';
 import 'package:window_manager/window_manager.dart';
 import '../../models/advanced_config.dart';
 import '../../models/filter_preset.dart';
+import '../../services/console_hotkey_service.dart';
 import '../../services/config_import_notifier.dart';
 import '../../services/settings_service.dart';
 import '../../services/win32_helpers.dart';
+import '../widgets/numeric_value_field.dart';
 
 /// 高级页面 — 专注模式、聚光灯、自动化规则、配置管理
 class AdvancedPage extends StatefulWidget {
@@ -16,8 +18,10 @@ class AdvancedPage extends StatefulWidget {
   final SpotlightConfig spotlightConfig;
   final List<AutomationRule> automationRules;
   final bool automationEnabled;
+  final ConsoleHotkeyConfig consoleHotkeyConfig;
   final ValueChanged<FocusModeConfig> onFocusModeChanged;
   final ValueChanged<SpotlightConfig> onSpotlightChanged;
+  final ValueChanged<ConsoleHotkeyConfig> onConsoleHotkeyChanged;
   final RegionMaskConfig regionMaskConfig;
   final ValueChanged<RegionMaskConfig> onRegionMaskChanged;
   final VoidCallback onStartDrawingRegion;
@@ -33,8 +37,10 @@ class AdvancedPage extends StatefulWidget {
     required this.spotlightConfig,
     required this.automationRules,
     required this.automationEnabled,
+    required this.consoleHotkeyConfig,
     required this.onFocusModeChanged,
     required this.onSpotlightChanged,
+    required this.onConsoleHotkeyChanged,
     required this.regionMaskConfig,
     required this.onRegionMaskChanged,
     required this.onStartDrawingRegion,
@@ -53,6 +59,7 @@ class _AdvancedPageState extends State<AdvancedPage> {
   late RegionMaskConfig _regionMask;
   late List<AutomationRule> _rules;
   late bool _automationEnabled;
+  late ConsoleHotkeyConfig _consoleHotkey;
   String? _currentForegroundProcess;
 
   @override
@@ -63,6 +70,7 @@ class _AdvancedPageState extends State<AdvancedPage> {
     _regionMask = widget.regionMaskConfig;
     _rules = List.from(widget.automationRules);
     _automationEnabled = widget.automationEnabled;
+    _consoleHotkey = widget.consoleHotkeyConfig;
     _detectCurrentProcess();
   }
 
@@ -74,6 +82,7 @@ class _AdvancedPageState extends State<AdvancedPage> {
     _regionMask = widget.regionMaskConfig;
     _rules = List.from(widget.automationRules);
     _automationEnabled = widget.automationEnabled;
+    _consoleHotkey = widget.consoleHotkeyConfig;
   }
 
   Future<void> _detectCurrentProcess() async {
@@ -91,6 +100,8 @@ class _AdvancedPageState extends State<AdvancedPage> {
         _buildRegionMaskSection(),
         const SizedBox(height: 20),
         _buildAutomationSection(),
+        const SizedBox(height: 20),
+        _buildHotkeySection(),
         const SizedBox(height: 20),
         _buildConfigSection(),
         const SizedBox(height: 24),
@@ -181,6 +192,7 @@ class _AdvancedPageState extends State<AdvancedPage> {
             value: _focus.dimOpacity,
             min: 0.1,
             max: 0.9,
+            fractionDigits: 2,
             onChanged: (v) {
               setState(() => _focus.dimOpacity = v);
               widget.onFocusModeChanged(_focus);
@@ -277,6 +289,7 @@ class _AdvancedPageState extends State<AdvancedPage> {
             value: _spotlight.dimOpacity,
             min: 0.1,
             max: 0.9,
+            fractionDigits: 2,
             onChanged: (v) {
               setState(() => _spotlight.dimOpacity = v);
               widget.onSpotlightChanged(_spotlight);
@@ -955,6 +968,101 @@ class _AdvancedPageState extends State<AdvancedPage> {
   }
 
   // ═══════════════════════════════════════════════
+  //  控制台快捷键
+  // ═══════════════════════════════════════════════
+
+  Widget _buildHotkeySection() {
+    final selectedPreset = consoleHotkeyPresetById(_consoleHotkey.presetId);
+    return _sectionCard(
+      title: '快捷键',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.keyboard_command_key_rounded,
+                  size: 20,
+                  color: Color(0xFF3B82F6),
+                ),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '打开控制台',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A1D26),
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      '在全屏滤镜下快速显示或隐藏设置面板',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _consoleHotkey.enabled,
+                activeThumbColor: const Color(0xFF3B82F6),
+                onChanged: (enabled) {
+                  final next = _consoleHotkey.copyWith(enabled: enabled);
+                  setState(() => _consoleHotkey = next);
+                  widget.onConsoleHotkeyChanged(next);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          DropdownButtonFormField<String>(
+            initialValue: selectedPreset.id,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: '快捷键',
+              isDense: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+            items: kConsoleHotkeyPresets
+                .map(
+                  (preset) => DropdownMenuItem(
+                    value: preset.id,
+                    child: Text(preset.label),
+                  ),
+                )
+                .toList(),
+            onChanged: _consoleHotkey.enabled
+                ? (presetId) {
+                    if (presetId == null) return;
+                    final next = _consoleHotkey.copyWith(presetId: presetId);
+                    setState(() => _consoleHotkey = next);
+                    widget.onConsoleHotkeyChanged(next);
+                  }
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════
   //  配置导入导出
   // ═══════════════════════════════════════════════
 
@@ -1061,6 +1169,7 @@ class _AdvancedPageState extends State<AdvancedPage> {
         startupEnabled: widget.settingsService.getStartupEnabled(),
         themeMode: widget.settingsService.getThemeMode(),
         automationEnabled: _automationEnabled,
+        consoleHotkey: _consoleHotkey,
         focusMode: _focus,
         spotlight: _spotlight,
         regionMask: _regionMask,
@@ -1116,6 +1225,7 @@ class _AdvancedPageState extends State<AdvancedPage> {
         _regionMask = config.regionMask;
         _rules = config.automationRules;
         _automationEnabled = config.automationEnabled;
+        _consoleHotkey = config.consoleHotkey;
       });
       notifyImportedConfig(
         config: config,
@@ -1125,6 +1235,7 @@ class _AdvancedPageState extends State<AdvancedPage> {
         onRegionMaskChanged: widget.onRegionMaskChanged,
         onAutomationRulesChanged: widget.onAutomationRulesChanged,
         onAutomationEnabledChanged: widget.onAutomationEnabledChanged,
+        onConsoleHotkeyChanged: widget.onConsoleHotkeyChanged,
       );
 
       if (mounted) {
@@ -1192,6 +1303,7 @@ class _AdvancedPageState extends State<AdvancedPage> {
     required double min,
     required double max,
     required ValueChanged<double> onChanged,
+    int? fractionDigits,
   }) {
     return Row(
       children: [
@@ -1213,18 +1325,21 @@ class _AdvancedPageState extends State<AdvancedPage> {
             ),
           ),
         ),
-        SizedBox(
-          width: 40,
-          child: Text(
-            value.toStringAsFixed(value == value.roundToDouble() ? 0 : 1),
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF3B82F6),
-              fontFamily: 'Consolas',
-            ),
-            textAlign: TextAlign.right,
+        NumericValueField(
+          value: value,
+          min: min,
+          max: max,
+          fractionDigits:
+              fractionDigits ?? (value == value.roundToDouble() ? 0 : 1),
+          width: 48,
+          label: label,
+          textStyle: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF3B82F6),
+            fontFamily: 'Consolas',
           ),
+          onChanged: onChanged,
         ),
       ],
     );
