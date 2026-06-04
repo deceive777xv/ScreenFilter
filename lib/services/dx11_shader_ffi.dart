@@ -112,6 +112,8 @@ class ShaderCompileResult {
 class DX11ShaderEngine {
   late final DynamicLibrary _lib;
   bool _initialized = false;
+  Pointer<Uint8>? _pixelBuf;
+  int _pixelBufSize = 0;
 
   late final _EngineInitDart _init;
   late final _EngineCompileShaderDart _compileShader;
@@ -263,16 +265,12 @@ class DX11ShaderEngine {
     if (result != 0) return null;
 
     final bufferSize = width * height * 4;
-    final pixelBuf = calloc<Uint8>(bufferSize);
+    final pixelBuf = _ensurePixelBuffer(bufferSize);
 
-    try {
-      final readResult = _getFramePixels(pixelBuf, bufferSize);
-      if (readResult != 0) return null;
+    final readResult = _getFramePixels(pixelBuf, bufferSize);
+    if (readResult != 0) return null;
 
-      return Uint8List.fromList(pixelBuf.asTypedList(bufferSize));
-    } finally {
-      calloc.free(pixelBuf);
-    }
+    return Uint8List.fromList(pixelBuf.asTypedList(bufferSize));
   }
 
   bool showOverlay(int width, int height) {
@@ -336,10 +334,31 @@ class DX11ShaderEngine {
 
   /// Shutdown and release all DX11 resources.
   void dispose() {
+    _freePixelBuffer();
     if (_initialized) {
       _hideOverlay();
       _shutdown();
       _initialized = false;
     }
+  }
+
+  Pointer<Uint8> _ensurePixelBuffer(int size) {
+    final current = _pixelBuf;
+    if (current != null && _pixelBufSize >= size) {
+      return current;
+    }
+
+    _freePixelBuffer();
+    _pixelBuf = calloc<Uint8>(size);
+    _pixelBufSize = size;
+    return _pixelBuf!;
+  }
+
+  void _freePixelBuffer() {
+    final current = _pixelBuf;
+    if (current == null) return;
+    calloc.free(current);
+    _pixelBuf = null;
+    _pixelBufSize = 0;
   }
 }

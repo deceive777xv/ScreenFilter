@@ -246,36 +246,87 @@ class AppConfig {
   };
 
   factory AppConfig.fromJson(Map<String, dynamic> json) {
-    final settings = json['settings'] as Map<String, dynamic>? ?? {};
+    final settings = _asMap(json['settings']) ?? {};
     return AppConfig(
       brightness: (settings['brightness'] as num?)?.toDouble() ?? 0.0,
       alpha: (settings['alpha'] as num?)?.toDouble() ?? 0.3,
-      baseColor: Color(settings['baseColor'] ?? 0x00000000),
-      activePreset: settings['activePreset'] as String?,
-      recentColors:
-          (settings['recentColors'] as List<dynamic>?)
-              ?.map((v) => Color(v as int))
-              .toList() ??
-          [],
-      fontFamily: settings['fontFamily'] ?? 'Microsoft YaHei',
-      startupEnabled: settings['startupEnabled'] ?? false,
-      themeMode: settings['themeMode'] ?? 'light',
-      automationEnabled: settings['automationEnabled'] ?? false,
-      focusMode: json['focusMode'] != null
-          ? FocusModeConfig.fromJson(json['focusMode'])
-          : FocusModeConfig(),
-      spotlight: json['spotlight'] != null
-          ? SpotlightConfig.fromJson(json['spotlight'])
-          : SpotlightConfig(),
-      regionMask: json['regionMask'] != null
-          ? RegionMaskConfig.fromJson(json['regionMask'])
-          : RegionMaskConfig(),
-      automationRules:
-          (json['automationRules'] as List<dynamic>?)
-              ?.map((r) => AutomationRule.fromJson(r))
-              .toList() ??
-          [],
+      baseColor: Color(_asInt(settings['baseColor']) ?? 0x00000000),
+      activePreset: _asString(settings['activePreset']),
+      recentColors: _colorList(settings['recentColors']),
+      fontFamily: _asString(settings['fontFamily']) ?? 'Microsoft YaHei',
+      startupEnabled: _asBool(settings['startupEnabled']) ?? false,
+      themeMode: _asString(settings['themeMode']) ?? 'light',
+      automationEnabled: _asBool(settings['automationEnabled']) ?? false,
+      focusMode: _parseConfig(
+        json['focusMode'],
+        FocusModeConfig(),
+        FocusModeConfig.fromJson,
+      ),
+      spotlight: _parseConfig(
+        json['spotlight'],
+        SpotlightConfig(),
+        SpotlightConfig.fromJson,
+      ),
+      regionMask: _parseConfig(
+        json['regionMask'],
+        RegionMaskConfig(),
+        RegionMaskConfig.fromJson,
+      ),
+      automationRules: _automationRulesList(json['automationRules']),
     );
+  }
+
+  static Map<String, dynamic>? _asMap(Object? value) {
+    if (value is! Map) return null;
+    try {
+      return Map<String, dynamic>.from(value);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static int? _asInt(Object? value) => value is int ? value : null;
+
+  static bool? _asBool(Object? value) => value is bool ? value : null;
+
+  static String? _asString(Object? value) => value is String ? value : null;
+
+  static List<Color> _colorList(Object? value) {
+    if (value is! List) return [];
+    final colors = <Color>[];
+    for (final item in value) {
+      final colorValue = _asInt(item);
+      if (colorValue == null) return [];
+      colors.add(Color(colorValue));
+    }
+    return colors;
+  }
+
+  static T _parseConfig<T>(
+    Object? value,
+    T fallback,
+    T Function(Map<String, dynamic> json) parse,
+  ) {
+    final map = _asMap(value);
+    if (map == null) return fallback;
+    try {
+      return parse(map);
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  static List<AutomationRule> _automationRulesList(Object? value) {
+    if (value is! List) return [];
+    try {
+      return value
+          .map(_asMap)
+          .whereType<Map<String, dynamic>>()
+          .map(AutomationRule.fromJson)
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 }
 

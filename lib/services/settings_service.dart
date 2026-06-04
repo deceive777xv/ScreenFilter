@@ -46,15 +46,13 @@ class SettingsService {
   List<Color> getRecentColors() {
     final list = _prefs.getStringList(_keyRecentColors);
     if (list == null || list.isEmpty) {
-      return [
-        Colors.transparent,
-        const Color(0xFFFFB300),
-        const Color(0xFF607D8B),
-        const Color(0xFF795548),
-        const Color(0xFF000000),
-      ];
+      return _defaultRecentColors();
     }
-    return list.map((s) => Color(int.parse(s))).toList();
+    try {
+      return list.map((s) => Color(int.parse(s))).toList();
+    } catch (_) {
+      return _defaultRecentColors();
+    }
   }
 
   // ─── 保存 ───
@@ -80,18 +78,13 @@ class SettingsService {
 
   OverlayComponent getOverlayComponent(OverlayType type) {
     final key = _overlayKey(type);
-    final json = _prefs.getString(key);
-    if (json == null) {
-      switch (type) {
-        case OverlayType.clock:
-          return OverlayComponent.createClock();
-        case OverlayType.slogan:
-          return OverlayComponent.createSlogan();
-        case OverlayType.watermark:
-          return OverlayComponent.createWatermark();
-      }
+    final decoded = _decodeMap(_prefs.getString(key));
+    if (decoded == null) return _defaultOverlayComponent(type);
+    try {
+      return OverlayComponent.fromJson(decoded);
+    } catch (_) {
+      return _defaultOverlayComponent(type);
     }
-    return OverlayComponent.fromJson(jsonDecode(json) as Map<String, dynamic>);
   }
 
   Future<void> setOverlayComponent(OverlayComponent component) {
@@ -131,22 +124,36 @@ class SettingsService {
   static const _keyRegionMask = 'advanced_region_mask';
 
   FocusModeConfig getFocusModeConfig() {
-    final json = _prefs.getString(_keyFocusMode);
-    if (json == null) return FocusModeConfig();
-    return FocusModeConfig.fromJson(jsonDecode(json));
+    final decoded = _decodeMap(_prefs.getString(_keyFocusMode));
+    if (decoded == null) return FocusModeConfig();
+    try {
+      return FocusModeConfig.fromJson(decoded);
+    } catch (_) {
+      return FocusModeConfig();
+    }
   }
 
   SpotlightConfig getSpotlightConfig() {
-    final json = _prefs.getString(_keySpotlight);
-    if (json == null) return SpotlightConfig();
-    return SpotlightConfig.fromJson(jsonDecode(json));
+    final decoded = _decodeMap(_prefs.getString(_keySpotlight));
+    if (decoded == null) return SpotlightConfig();
+    try {
+      return SpotlightConfig.fromJson(decoded);
+    } catch (_) {
+      return SpotlightConfig();
+    }
   }
 
   List<AutomationRule> getAutomationRules() {
-    final json = _prefs.getString(_keyAutomationRules);
-    if (json == null) return [];
-    final list = jsonDecode(json) as List<dynamic>;
-    return list.map((r) => AutomationRule.fromJson(r)).toList();
+    final decoded = _decodeList(_prefs.getString(_keyAutomationRules));
+    if (decoded == null) return [];
+    try {
+      return decoded
+          .whereType<Map<String, dynamic>>()
+          .map(AutomationRule.fromJson)
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   bool getAutomationEnabled() => _prefs.getBool(_keyAutomationEnabled) ?? false;
@@ -167,9 +174,13 @@ class SettingsService {
       _prefs.setBool(_keyAutomationEnabled, v);
 
   RegionMaskConfig getRegionMaskConfig() {
-    final json = _prefs.getString(_keyRegionMask);
-    if (json == null) return RegionMaskConfig();
-    return RegionMaskConfig.fromJson(jsonDecode(json));
+    final decoded = _decodeMap(_prefs.getString(_keyRegionMask));
+    if (decoded == null) return RegionMaskConfig();
+    try {
+      return RegionMaskConfig.fromJson(decoded);
+    } catch (_) {
+      return RegionMaskConfig();
+    }
   }
 
   Future<void> setRegionMaskConfig(RegionMaskConfig config) =>
@@ -211,5 +222,44 @@ class SettingsService {
       setRegionMaskConfig(config.regionMask),
       setAutomationRules(config.automationRules),
     ]);
+  }
+
+  List<Color> _defaultRecentColors() => [
+    Colors.transparent,
+    const Color(0xFFFFB300),
+    const Color(0xFF607D8B),
+    const Color(0xFF795548),
+    const Color(0xFF000000),
+  ];
+
+  OverlayComponent _defaultOverlayComponent(OverlayType type) {
+    switch (type) {
+      case OverlayType.clock:
+        return OverlayComponent.createClock();
+      case OverlayType.slogan:
+        return OverlayComponent.createSlogan();
+      case OverlayType.watermark:
+        return OverlayComponent.createWatermark();
+    }
+  }
+
+  Map<String, dynamic>? _decodeMap(String? value) {
+    if (value == null) return null;
+    try {
+      final decoded = jsonDecode(value);
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<dynamic>? _decodeList(String? value) {
+    if (value == null) return null;
+    try {
+      final decoded = jsonDecode(value);
+      return decoded is List<dynamic> ? decoded : null;
+    } catch (_) {
+      return null;
+    }
   }
 }
