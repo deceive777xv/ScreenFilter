@@ -22,6 +22,7 @@ class ShaderFilterService {
     DX11ShaderEngine? engine,
     FilterImageDecoder? decodePixels,
     Win32PollingService? win32PollingService,
+    this.fallbackFrameInterval = const Duration(milliseconds: 66),
   }) : _engine = engine ?? DX11ShaderEngine(),
        _decodePixelsToImage = decodePixels ?? _defaultDecodePixels,
        _win32PollingService = win32PollingService ?? Win32PollingService(),
@@ -31,6 +32,7 @@ class ShaderFilterService {
   final FilterImageDecoder _decodePixelsToImage;
   final Win32PollingService _win32PollingService;
   final bool _ownsWin32PollingService;
+  final Duration fallbackFrameInterval;
   bool _engineReady = false;
   bool _shaderCompiled = false;
   bool _nativeOverlayActive = false;
@@ -38,6 +40,7 @@ class ShaderFilterService {
   double? _lastFullscreenMouseX;
   double? _lastFullscreenMouseY;
   Color? _lastFullscreenAccentColor;
+  double? _lastFallbackFrameTime;
   RegionMaskConfig _regionMaskConfig = RegionMaskConfig();
   String? _lastRegionMaskSignature;
 
@@ -207,6 +210,7 @@ class ShaderFilterService {
     Color accentColor,
   ) {
     _mode = newMode;
+    _lastFallbackFrameTime = null;
     _screenSize = screenSize;
     _accentColor = accentColor;
     modeNotifier.value = newMode;
@@ -249,6 +253,7 @@ class ShaderFilterService {
   /// Stop the filter.
   void stopFilter() {
     _mode = FilterApplyMode.none;
+    _lastFallbackFrameTime = null;
     _filterTimer?.cancel();
     _filterTimer = null;
     _stopCursorPolling();
@@ -336,10 +341,24 @@ class ShaderFilterService {
       _engine.hideOverlay();
     }
 
+    if (_shouldSkipFallbackFrame(time)) return;
+    _lastFallbackFrameTime = time;
     final pixels = _engine.renderFrame(w, h);
     if (pixels != null) {
       _decodePixels(pixels, w, h);
     }
+  }
+
+  bool _shouldSkipFallbackFrame(double time) {
+    if (_mode != FilterApplyMode.dynamic) return false;
+    final lastTime = _lastFallbackFrameTime;
+    if (lastTime == null) return false;
+    final elapsedSeconds = time - lastTime;
+    if (elapsedSeconds < 0) return false;
+    final elapsed = Duration(
+      microseconds: (elapsedSeconds * Duration.microsecondsPerSecond).round(),
+    );
+    return elapsed < fallbackFrameInterval;
   }
 
   bool _tryStartNativeOverlay() {

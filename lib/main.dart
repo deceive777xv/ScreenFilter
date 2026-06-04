@@ -15,6 +15,7 @@ import 'ui/overlays/region_mask_drawing_overlay.dart';
 import 'models/overlay_component.dart';
 import 'models/advanced_config.dart';
 import 'models/filter_preset.dart';
+import 'services/automation_preset_controller.dart';
 import 'services/debounced_action.dart';
 import 'services/filter_overlay_logic.dart';
 import 'services/settings_service.dart';
@@ -136,7 +137,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   late List<AutomationRule> _automationRules;
   late bool _automationEnabled;
   Win32PollingRelease? _automationPollingRelease;
-  String? _lastMatchedPreset;
+  late final AutomationPresetController _automationPresetController;
   bool _isDrawingRegion = false;
   Color? _lastTrayBaseColor;
   double? _lastTrayAlpha;
@@ -171,6 +172,11 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     );
     _trayMenuRefreshDebouncer = DebouncedAction(
       delay: const Duration(milliseconds: 120),
+    );
+    _automationPresetController = AutomationPresetController(
+      captureCurrentFilter: _captureBasicFilterSnapshot,
+      applyPreset: _applyPresetByName,
+      restoreFilter: _restoreBasicFilterSnapshot,
     );
 
     // Init Win32 polling and shader filter services
@@ -512,6 +518,9 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   void _onAutomationRulesChanged(List<AutomationRule> rules) {
     setState(() => _automationRules = rules);
     _settings.setAutomationRules(rules);
+    if (_automationEnabled) {
+      _checkAutomationRules(_win32PollingService.foregroundProcessName.value);
+    }
   }
 
   void _onAutomationEnabledChanged(bool enabled) {
@@ -538,26 +547,15 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   void _stopAutomation() {
     _automationPollingRelease?.call();
     _automationPollingRelease = null;
-    _lastMatchedPreset = null;
+    _automationPresetController.reset(restore: true);
   }
 
   void _checkAutomationRules(String? processName) {
-    if (!_automationEnabled || _automationRules.isEmpty) return;
-    if (processName == null) return;
-
-    final lowerProcess = processName.toLowerCase();
-    for (final rule in _automationRules) {
-      if (!rule.enabled) continue;
-      if (lowerProcess == rule.processName.toLowerCase()) {
-        if (_lastMatchedPreset != rule.presetName) {
-          _lastMatchedPreset = rule.presetName;
-          _applyPresetByName(rule.presetName);
-        }
-        return;
-      }
-    }
-    // No rule matched — clear last match so it can re-trigger later
-    _lastMatchedPreset = null;
+    _automationPresetController.update(
+      enabled: _automationEnabled,
+      rules: _automationRules,
+      processName: processName,
+    );
   }
 
   void _applyPresetByName(String name) {
@@ -588,11 +586,31 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       _automationEnabled = config.automationEnabled;
     });
     _shaderFilterService.updateRegionMask(_regionMaskConfig);
+    _automationPresetController.reset(restore: false);
     if (_automationEnabled) {
       _startAutomation();
     } else {
       _stopAutomation();
     }
+    _scheduleTrayMenuRefresh();
+  }
+
+  BasicFilterSnapshot _captureBasicFilterSnapshot() {
+    return BasicFilterSnapshot(
+      baseColor: _baseColor,
+      alpha: _alpha,
+      brightness: _brightness,
+      activePreset: _settings.getActivePreset(),
+    );
+  }
+
+  void _restoreBasicFilterSnapshot(BasicFilterSnapshot snapshot) {
+    _applyBasicFilterValues(
+      baseColor: snapshot.baseColor,
+      alpha: snapshot.alpha,
+      brightness: snapshot.brightness,
+      activePreset: snapshot.activePreset,
+    );
     _scheduleTrayMenuRefresh();
   }
 

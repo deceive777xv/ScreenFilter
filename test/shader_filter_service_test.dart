@@ -87,6 +87,47 @@ void main() {
     expect(engine.lastMaskPoints, [2.0, 4.0, 6.0, 8.0, 10.0, 12.0]);
   });
 
+  test('throttles dynamic fullscreen fallback rendering', () {
+    final engine = _FakeDX11ShaderEngine()
+      ..overlayCanStart = false
+      ..nextFramePixels = null;
+    final service = ShaderFilterService(
+      engine: engine,
+      fallbackFrameInterval: const Duration(milliseconds: 66),
+    );
+
+    service.init();
+    service.compileShader('float4 main() : SV_TARGET { return 1; }');
+    service.updateScreenSize(const Size(1, 1));
+    service.applyFilter(
+      FilterApplyMode.dynamic,
+      const Size(1, 1),
+      Colors.white,
+    );
+    service.pauseOwnTimer();
+
+    expect(engine.renderFrameCalls, 1);
+
+    service.renderFullscreenFilterFrame(
+      time: 0.03,
+      mouseX: 0.5,
+      mouseY: 0.5,
+      accentColor: Colors.white,
+    );
+
+    expect(engine.renderFrameCalls, 1);
+
+    service.renderFullscreenFilterFrame(
+      time: 0.07,
+      mouseX: 0.5,
+      mouseY: 0.5,
+      accentColor: Colors.white,
+    );
+
+    expect(engine.renderFrameCalls, 2);
+    service.stopFilter();
+  });
+
   testWidgets('disposes replaced and stopped fallback images', (tester) async {
     final engine = _FakeDX11ShaderEngine()
       ..overlayCanStart = false

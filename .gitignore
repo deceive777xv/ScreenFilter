@@ -31,6 +31,7 @@ test/*
 !test/debounced_action_test.dart
 !test/filter_overlay_logic_test.dart
 !test/config_import_notifier_test.dart
+!test/automation_preset_controller_test.dart
 img_temp/
 script.ps1
 

@@ -42,6 +42,11 @@ static ID3D11SamplerState*     g_sampler       = nullptr;
 static ID3D11Buffer*           g_overlayCbuffer = nullptr;
 static int32_t                 g_overlayWidth  = 0;
 static int32_t                 g_overlayHeight = 0;
+static bool                    g_overlayBoundsValid = false;
+static int                     g_overlayX      = 0;
+static int                     g_overlayY      = 0;
+static int                     g_overlayWindowWidth = 0;
+static int                     g_overlayWindowHeight = 0;
 static float                   g_filterOpacity = 1.0f;
 static float                   g_filterBrightness = 0.0f;
 static bool                    g_maskEnabled  = false;
@@ -259,6 +264,7 @@ static void ReleaseOverlayResources() {
         DestroyWindow(g_overlayWindow);
         g_overlayWindow = nullptr;
     }
+    g_overlayBoundsValid = false;
 }
 
 static LRESULT CALLBACK OverlayWndProc(
@@ -341,6 +347,12 @@ static void PositionOverlayWindow(int32_t width, int32_t height) {
         }
     }
 
+    if (g_overlayBoundsValid &&
+        x == g_overlayX && y == g_overlayY &&
+        w == g_overlayWindowWidth && h == g_overlayWindowHeight) {
+        return;
+    }
+
     SetWindowPos(
         g_overlayWindow, HWND_TOPMOST, x, y, w, h,
         SWP_NOACTIVATE | SWP_SHOWWINDOW
@@ -351,6 +363,12 @@ static void PositionOverlayWindow(int32_t width, int32_t height) {
             SWP_NOACTIVATE | SWP_SHOWWINDOW
         );
     }
+
+    g_overlayBoundsValid = true;
+    g_overlayX = x;
+    g_overlayY = y;
+    g_overlayWindowWidth = w;
+    g_overlayWindowHeight = h;
 }
 
 static bool CreateOverlayWindow(int32_t width, int32_t height) {
@@ -479,6 +497,7 @@ static bool EnsureOverlay(int32_t width, int32_t height) {
         PositionOverlayWindow(width, height);
         return CreateOverlaySwapChain(width, height);
     }
+    PositionOverlayWindow(width, height);
     return true;
 }
 
@@ -809,6 +828,14 @@ SHADER_API int32_t engine_set_region_mask(
 
     if (totalPoints > 0 && !points) {
         return -1;
+    }
+
+    if (totalPoints == 0) {
+        const std::vector<uint8_t> emptyMask(1, 0);
+        if (!CreateMaskTexture(1, 1, emptyMask)) return -1;
+        g_maskEnabled = true;
+        g_maskInverted = inverted != 0;
+        return 0;
     }
 
     std::vector<uint8_t> mask(static_cast<size_t>(width) * height, 0);
