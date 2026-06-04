@@ -39,4 +39,40 @@ void main() {
       isFalse,
     );
   });
+
+  test('base shader paint state repaints only when inputs change', () {
+    const current = BaseShaderPaintState(
+      width: 1920,
+      height: 1080,
+      brightness: 0.1,
+      alpha: 0.4,
+      baseColorValue: 0xFFFFB300,
+    );
+
+    expect(current.shouldRepaint(current), isFalse);
+    expect(
+      current.shouldRepaint(
+        const BaseShaderPaintState(
+          width: 1920,
+          height: 1080,
+          brightness: 0.1,
+          alpha: 0.5,
+          baseColorValue: 0xFFFFB300,
+        ),
+      ),
+      isTrue,
+    );
+    expect(
+      current.shouldRepaint(
+        const BaseShaderPaintState(
+          width: 1920,
+          height: 1080,
+          brightness: 0.1,
+          alpha: 0.4,
+          baseColorValue: 0xFF607D8B,
+        ),
+      ),
+      isTrue,
+    );
+  });
 }

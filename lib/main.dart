@@ -779,11 +779,18 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     return Builder(
       builder: (context) {
         final size = MediaQuery.of(context).size;
+        final paintState = BaseShaderPaintState(
+          width: size.width,
+          height: size.height,
+          brightness: _brightness,
+          alpha: _alpha,
+          baseColorValue: _baseColor.toARGB32(),
+        );
 
-        _shader!.setFloat(0, size.width);
-        _shader!.setFloat(1, size.height);
-        _shader!.setFloat(2, _brightness);
-        _shader!.setFloat(3, _alpha);
+        _shader!.setFloat(0, paintState.width);
+        _shader!.setFloat(1, paintState.height);
+        _shader!.setFloat(2, paintState.brightness);
+        _shader!.setFloat(3, paintState.alpha);
         _shader!.setFloat(4, _baseColor.r);
         _shader!.setFloat(5, _baseColor.g);
         _shader!.setFloat(6, _baseColor.b);
@@ -791,7 +798,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
 
         return CustomPaint(
           size: Size.infinite,
-          painter: ShaderPainter(shader: _shader!),
+          painter: ShaderPainter(shader: _shader!, state: paintState),
         );
       },
     );
@@ -859,8 +866,9 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
 
 class ShaderPainter extends CustomPainter {
   final ui.FragmentShader shader;
+  final BaseShaderPaintState state;
 
-  ShaderPainter({required this.shader});
+  ShaderPainter({required this.shader, required this.state});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -869,7 +877,7 @@ class ShaderPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    return true;
-  }
+  bool shouldRepaint(covariant ShaderPainter oldDelegate) =>
+      !identical(oldDelegate.shader, shader) ||
+      state.shouldRepaint(oldDelegate.state);
 }
