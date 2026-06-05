@@ -35,6 +35,7 @@ test/*
 !test/numeric_value_field_test.dart
 !test/advanced_page_test.dart
 !test/console_hotkey_service_test.dart
+!test/filter_preset_test.dart
 img_temp/
 script.ps1
 

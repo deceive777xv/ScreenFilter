@@ -570,15 +570,27 @@ class _ConsolePanelState extends State<ConsolePanel> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildHomeColorBlock(Colors.transparent, '清除', 0.0),
+              _buildHomePresetBlock('清除'),
               const SizedBox(width: 28),
-              _buildHomeColorBlock(const Color(0x33FFB300), '护眼', 0.15),
+              _buildHomePresetBlock('护眼'),
               const SizedBox(width: 28),
-              _buildHomeColorBlock(const Color(0x80000000), '夜间', 0.4),
+              _buildHomePresetBlock('夜间'),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildHomePresetBlock(String name) {
+    final preset = basicFilterPresetByName(name);
+    if (preset == null) {
+      return _buildHomeColorBlock(Colors.transparent, name, 0.0);
+    }
+    return _buildHomeColorBlock(
+      preset.effectiveOverlayColor,
+      preset.name,
+      preset.alpha,
     );
   }
 
@@ -1271,6 +1283,8 @@ class _ConsolePanelState extends State<ConsolePanel> {
                   : const Color(0xFF6B7280),
             ),
             const SizedBox(height: 4),
+            _buildPresetPreviewSwatch(preset),
+            const SizedBox(height: 4),
             Text(
               preset.name,
               style: TextStyle(
@@ -1286,6 +1300,20 @@ class _ConsolePanelState extends State<ConsolePanel> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPresetPreviewSwatch(FilterPreset preset) {
+    final color = preset.effectiveOverlayColor;
+    final isClear = color.toARGB32() == Colors.transparent.toARGB32();
+    return Container(
+      width: 24,
+      height: 5,
+      decoration: BoxDecoration(
+        color: isClear ? Colors.transparent : color,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFD1D5DB), width: 0.8),
       ),
     );
   }
