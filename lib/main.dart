@@ -15,6 +15,7 @@ import 'ui/overlays/region_mask_drawing_overlay.dart';
 import 'models/overlay_component.dart';
 import 'models/advanced_config.dart';
 import 'models/filter_preset.dart';
+import 'models/screen_post_process_effect.dart';
 import 'services/automation_preset_controller.dart';
 import 'services/console_hotkey_service.dart';
 import 'services/debounced_action.dart';
@@ -22,6 +23,7 @@ import 'services/filter_overlay_logic.dart';
 import 'services/keyed_debounced_action.dart';
 import 'services/settings_service.dart';
 import 'services/shader_filter_service.dart';
+import 'services/tray_filter_memory.dart';
 import 'services/tray_menu_layout.dart';
 import 'services/win32_polling_service.dart';
 
@@ -143,9 +145,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   late final AutomationPresetController _automationPresetController;
   late final ConsoleHotkeyService _consoleHotkeyService;
   bool _isDrawingRegion = false;
-  Color? _lastTrayBaseColor;
-  double? _lastTrayAlpha;
-  double? _lastTrayBrightness;
+  final TrayFilterMemory _trayFilterMemory = TrayFilterMemory();
   late final DebouncedAction _basicFilterPersistDebouncer;
   late final DebouncedAction _trayMenuRefreshDebouncer;
   late final KeyedDebouncedAction<String> _settingsPersistDebouncer;
@@ -393,16 +393,22 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       return;
     }
 
-    if (_lastTrayAlpha != null && _lastTrayAlpha!.abs() > 0.001) {
+    final restoreTarget = _trayFilterMemory.restoreTarget;
+    if (restoreTarget is TrayNativeFilterSnapshot &&
+        _restoreNativeTrayFilter(restoreTarget)) {
+      return;
+    }
+    if (restoreTarget is TrayBasicFilterSnapshot) {
       _applyBasicFilterValues(
-        baseColor: _lastTrayBaseColor ?? const Color(0xFFFFB300),
-        alpha: _lastTrayAlpha!,
-        brightness: _lastTrayBrightness ?? 0.0,
+        baseColor: restoreTarget.baseColor,
+        alpha: restoreTarget.alpha,
+        brightness: restoreTarget.brightness,
         activePreset: null,
       );
-    } else {
-      _applyPresetByName('护眼');
+      return;
     }
+
+    _applyPresetByName('护眼');
   }
 
   void _toggleTraySpotlight() {
@@ -427,8 +433,12 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   }
 
   void _clearTrayFilter({required bool rememberCurrent}) {
-    if (rememberCurrent && _shaderFilterService.mode == FilterApplyMode.none) {
-      _rememberCurrentBaseFilter();
+    if (rememberCurrent) {
+      if (_shaderFilterService.mode != FilterApplyMode.none) {
+        _rememberCurrentNativeFilter();
+      } else {
+        _rememberCurrentBaseFilter();
+      }
     }
     if (_shaderFilterService.mode != FilterApplyMode.none) {
       _shaderFilterService.stopFilter();
@@ -443,10 +453,51 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   }
 
   void _rememberCurrentBaseFilter() {
-    if (!_baseFilterEnabled) return;
-    _lastTrayBaseColor = _baseColor;
-    _lastTrayAlpha = _alpha;
-    _lastTrayBrightness = _brightness;
+    _trayFilterMemory.rememberBasic(
+      baseColor: _baseColor,
+      alpha: _alpha,
+      brightness: _brightness,
+    );
+  }
+
+  void _rememberCurrentNativeFilter() {
+    _trayFilterMemory.rememberNative(
+      mode: _shaderFilterService.mode,
+      accentColor: _shaderFilterService.accentColor,
+      baseColor: _baseColor,
+      alpha: _alpha,
+      brightness: _brightness,
+      shaderCompiled: _shaderFilterService.isShaderCompiled,
+      postProcessEffect: _shaderFilterService.postProcessEffect,
+      postProcessIntensity: _shaderFilterService.postProcessIntensity,
+    );
+  }
+
+  bool _restoreNativeTrayFilter(TrayNativeFilterSnapshot snapshot) {
+    if (snapshot.postProcessEffect == ScreenPostProcessEffect.none &&
+        !_shaderFilterService.isShaderCompiled) {
+      return false;
+    }
+
+    final media = MediaQuery.of(context);
+    _applyBasicFilterValues(
+      baseColor: snapshot.baseColor,
+      alpha: snapshot.alpha,
+      brightness: snapshot.brightness,
+      activePreset: null,
+      stopShaderFilter: false,
+    );
+    _shaderFilterService.updateScreenSize(media.size);
+    _shaderFilterService.updateDevicePixelRatio(media.devicePixelRatio);
+    _shaderFilterService.updateAccentColor(snapshot.accentColor);
+    _shaderFilterService.applyFilter(
+      snapshot.mode,
+      media.size,
+      snapshot.accentColor,
+      postProcessEffect: snapshot.postProcessEffect,
+      postProcessIntensity: snapshot.postProcessIntensity,
+    );
+    return true;
   }
 
   void _applyBasicFilterValues({
