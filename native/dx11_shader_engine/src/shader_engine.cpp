@@ -13,6 +13,10 @@
 #include <vector>
 #include <mutex>
 
+#ifndef WDA_EXCLUDEFROMCAPTURE
+#define WDA_EXCLUDEFROMCAPTURE 0x00000011
+#endif
+
 // ── Internal state ──────────────────────────────────────────────────────────
 static ID3D11Device*           g_device       = nullptr;
 static ID3D11DeviceContext*    g_context      = nullptr;
@@ -38,10 +42,18 @@ static IDCompositionVisual*    g_dcompVisual   = nullptr;
 static IDXGISwapChain1*        g_overlaySwapChain = nullptr;
 static ID3D11RenderTargetView* g_overlayRtv    = nullptr;
 static ID3D11PixelShader*      g_compositeShader = nullptr;
+static ID3D11PixelShader*      g_mosaicShader  = nullptr;
 static ID3D11SamplerState*     g_sampler       = nullptr;
 static ID3D11Buffer*           g_overlayCbuffer = nullptr;
+static ID3D11Buffer*           g_postProcessCbuffer = nullptr;
+static IDXGIOutputDuplication* g_outputDuplication = nullptr;
+static ID3D11Texture2D*        g_screenTexture = nullptr;
+static ID3D11ShaderResourceView* g_screenSrv   = nullptr;
 static int32_t                 g_overlayWidth  = 0;
 static int32_t                 g_overlayHeight = 0;
+static int32_t                 g_screenWidth   = 0;
+static int32_t                 g_screenHeight  = 0;
+static DXGI_FORMAT             g_screenFormat  = DXGI_FORMAT_UNKNOWN;
 static bool                    g_overlayBoundsValid = false;
 static int                     g_overlayX      = 0;
 static int                     g_overlayY      = 0;
@@ -52,6 +64,8 @@ static ULONGLONG               g_lastFlutterWindowSearchTick = 0;
 static ULONGLONG               g_lastOverlayPositionTick = 0;
 static float                   g_filterOpacity = 1.0f;
 static float                   g_filterBrightness = 0.0f;
+static int32_t                 g_postProcessEffect = 0;
+static float                   g_postProcessIntensity = 24.0f;
 static bool                    g_maskEnabled  = false;
 static bool                    g_maskInverted = false;
 static int32_t                 g_maskWidth    = 0;
@@ -80,6 +94,14 @@ struct alignas(16) OverlayUniforms {
 };
 
 static OverlayUniforms g_overlayUniforms = {1.0f, 0.0f, 0.0f, 0.0f};
+
+struct alignas(16) PostProcessUniforms {
+    float u_BlockSize;
+    float u_TargetSize[2];
+    float _pad0;
+};
+
+static PostProcessUniforms g_postProcessUniforms = {24.0f, {1.0f, 1.0f}, 0.0f};
 
 // ── Full-screen triangle vertex shader (compiled at init) ──────────────────
 static const char* kVertexShaderCode = R"(
@@ -143,6 +165,32 @@ float4 main(PS_INPUT input) : SV_TARGET {
 }
 )";
 
+static const char* kMosaicShaderCode = R"(
+cbuffer PostProcessUniforms : register(b2) {
+    float  u_BlockSize;
+    float2 u_TargetSize;
+    float  _pad0;
+};
+
+Texture2D screenFrame : register(t0);
+SamplerState frameSampler : register(s0);
+
+struct PS_INPUT {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float4 main(PS_INPUT input) : SV_TARGET {
+    float blockSize = max(u_BlockSize, 1.0);
+    float2 targetSize = max(u_TargetSize, float2(1.0, 1.0));
+    float2 pixel = input.uv * targetSize;
+    float2 blockCenter = floor(pixel / blockSize) * blockSize + blockSize * 0.5;
+    float2 sampleUv = saturate(blockCenter / targetSize);
+    float4 c = screenFrame.Sample(frameSampler, sampleUv);
+    return float4(c.rgb, 1.0);
+}
+)";
+
 // ── Helper: safe release ────────────────────────────────────────────────────
 template<typename T>
 static void SafeRelease(T*& p) {
@@ -192,6 +240,19 @@ static void ReleaseOverlaySwapChain() {
     SafeRelease(g_overlaySwapChain);
     g_overlayWidth = 0;
     g_overlayHeight = 0;
+}
+
+static void ReleaseScreenFrameResources() {
+    SafeRelease(g_screenSrv);
+    SafeRelease(g_screenTexture);
+    g_screenWidth = 0;
+    g_screenHeight = 0;
+    g_screenFormat = DXGI_FORMAT_UNKNOWN;
+}
+
+static void ReleaseScreenCaptureResources() {
+    SafeRelease(g_outputDuplication);
+    ReleaseScreenFrameResources();
 }
 
 static void ReleaseMaskResources() {
@@ -260,8 +321,121 @@ static bool CreateMaskTexture(
     return true;
 }
 
+static bool EnsureOutputDuplication() {
+    if (g_outputDuplication) return true;
+    if (!g_device) return false;
+
+    IDXGIDevice* dxgiDevice = nullptr;
+    IDXGIAdapter* adapter = nullptr;
+    IDXGIOutput* output = nullptr;
+    IDXGIOutput1* output1 = nullptr;
+
+    HRESULT hr = g_device->QueryInterface(
+        __uuidof(IDXGIDevice), reinterpret_cast<void**>(&dxgiDevice)
+    );
+    if (FAILED(hr)) return false;
+
+    hr = dxgiDevice->GetAdapter(&adapter);
+    dxgiDevice->Release();
+    if (FAILED(hr)) return false;
+
+    hr = adapter->EnumOutputs(0, &output);
+    adapter->Release();
+    if (FAILED(hr)) return false;
+
+    hr = output->QueryInterface(
+        __uuidof(IDXGIOutput1), reinterpret_cast<void**>(&output1)
+    );
+    output->Release();
+    if (FAILED(hr)) return false;
+
+    hr = output1->DuplicateOutput(g_device, &g_outputDuplication);
+    output1->Release();
+    return SUCCEEDED(hr);
+}
+
+static bool EnsureScreenFrameTexture(const D3D11_TEXTURE2D_DESC& srcDesc) {
+    if (g_screenTexture &&
+        g_screenWidth == static_cast<int32_t>(srcDesc.Width) &&
+        g_screenHeight == static_cast<int32_t>(srcDesc.Height) &&
+        g_screenFormat == srcDesc.Format) {
+        return true;
+    }
+
+    ReleaseScreenFrameResources();
+
+    D3D11_TEXTURE2D_DESC desc = srcDesc;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.SampleDesc.Count = 1;
+    desc.SampleDesc.Quality = 0;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    desc.CPUAccessFlags = 0;
+    desc.MiscFlags = 0;
+
+    HRESULT hr = g_device->CreateTexture2D(&desc, nullptr, &g_screenTexture);
+    if (FAILED(hr)) return false;
+
+    hr = g_device->CreateShaderResourceView(g_screenTexture, nullptr, &g_screenSrv);
+    if (FAILED(hr)) {
+        ReleaseScreenFrameResources();
+        return false;
+    }
+
+    g_screenWidth = static_cast<int32_t>(srcDesc.Width);
+    g_screenHeight = static_cast<int32_t>(srcDesc.Height);
+    g_screenFormat = srcDesc.Format;
+    return true;
+}
+
+static bool CaptureScreenFrame() {
+    if (!g_context) return false;
+    if (!EnsureOutputDuplication()) {
+        return g_screenSrv != nullptr;
+    }
+
+    DXGI_OUTDUPL_FRAME_INFO frameInfo = {};
+    IDXGIResource* desktopResource = nullptr;
+    HRESULT hr = g_outputDuplication->AcquireNextFrame(
+        0, &frameInfo, &desktopResource
+    );
+
+    if (hr == DXGI_ERROR_WAIT_TIMEOUT) {
+        return g_screenSrv != nullptr;
+    }
+    if (hr == DXGI_ERROR_ACCESS_LOST || hr == DXGI_ERROR_INVALID_CALL) {
+        SafeRelease(g_outputDuplication);
+        return g_screenSrv != nullptr;
+    }
+    if (FAILED(hr)) {
+        return g_screenSrv != nullptr;
+    }
+
+    ID3D11Texture2D* frameTexture = nullptr;
+    hr = desktopResource->QueryInterface(
+        __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&frameTexture)
+    );
+    desktopResource->Release();
+
+    bool ok = false;
+    if (SUCCEEDED(hr)) {
+        D3D11_TEXTURE2D_DESC desc = {};
+        frameTexture->GetDesc(&desc);
+        ok = EnsureScreenFrameTexture(desc);
+        if (ok) {
+            g_context->CopyResource(g_screenTexture, frameTexture);
+        }
+        frameTexture->Release();
+    }
+
+    g_outputDuplication->ReleaseFrame();
+    return ok && g_screenSrv;
+}
+
 static void ReleaseOverlayResources() {
     ReleaseOverlaySwapChain();
+    ReleaseScreenCaptureResources();
     SafeRelease(g_dcompVisual);
     SafeRelease(g_dcompTarget);
     SafeRelease(g_dcompDevice);
@@ -431,6 +605,7 @@ static bool CreateOverlayWindow(int32_t width, int32_t height) {
     if (!g_overlayWindow) return false;
 
     ShowWindow(g_overlayWindow, SW_SHOWNOACTIVATE);
+    SetWindowDisplayAffinity(g_overlayWindow, WDA_EXCLUDEFROMCAPTURE);
     PositionOverlayWindow(width, height, true);
     return true;
 }
@@ -572,6 +747,58 @@ static bool RenderUserShaderToTarget(
     return true;
 }
 
+static bool RenderPostProcessToTarget(
+    int32_t width, int32_t height, ID3D11RenderTargetView* target
+) {
+    if (!g_context || !g_vertexShader || !g_mosaicShader ||
+        !g_sampler || !g_postProcessCbuffer || !target) {
+        return false;
+    }
+    if (g_postProcessEffect != 1) {
+        return false;
+    }
+    if (!CaptureScreenFrame()) {
+        return false;
+    }
+
+    g_postProcessUniforms.u_BlockSize =
+        (std::max)(1.0f, g_postProcessIntensity);
+    g_postProcessUniforms.u_TargetSize[0] = static_cast<float>(width);
+    g_postProcessUniforms.u_TargetSize[1] = static_cast<float>(height);
+
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    HRESULT hr = g_context->Map(
+        g_postProcessCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped
+    );
+    if (FAILED(hr)) return false;
+    memcpy(mapped.pData, &g_postProcessUniforms, sizeof(PostProcessUniforms));
+    g_context->Unmap(g_postProcessCbuffer, 0);
+
+    ID3D11ShaderResourceView* nullSrv[1] = {nullptr};
+    g_context->PSSetShaderResources(0, 1, nullSrv);
+    g_context->OMSetRenderTargets(1, &target, nullptr);
+
+    D3D11_VIEWPORT vp = {};
+    vp.Width = static_cast<float>(width);
+    vp.Height = static_cast<float>(height);
+    vp.MaxDepth = 1.0f;
+    g_context->RSSetViewports(1, &vp);
+
+    float clearColor[4] = {0, 0, 0, 0};
+    g_context->ClearRenderTargetView(target, clearColor);
+
+    g_context->VSSetShader(g_vertexShader, nullptr, 0);
+    g_context->PSSetShader(g_mosaicShader, nullptr, 0);
+    g_context->PSSetShaderResources(0, 1, &g_screenSrv);
+    g_context->PSSetSamplers(0, 1, &g_sampler);
+    g_context->PSSetConstantBuffers(2, 1, &g_postProcessCbuffer);
+    g_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    g_context->Draw(3, 0);
+
+    g_context->PSSetShaderResources(0, 1, nullSrv);
+    return true;
+}
+
 static bool RenderCompositeToOverlay(int32_t width, int32_t height) {
     if (!g_context || !g_renderSrv || !g_overlayRtv || !g_compositeShader ||
         !g_sampler || !g_overlayCbuffer || !g_overlaySwapChain) {
@@ -678,6 +905,25 @@ SHADER_API int32_t engine_init() {
     compositeBlob->Release();
     if (FAILED(hr)) return -1;
 
+    // Compile the built-in mosaic post-processing shader.
+    ID3DBlob* mosaicBlob = nullptr;
+    ID3DBlob* mosaicError = nullptr;
+    hr = D3DCompile(
+        kMosaicShaderCode, strlen(kMosaicShaderCode),
+        "MosaicPostProcessPS", nullptr, nullptr,
+        "main", "ps_5_0", 0, 0,
+        &mosaicBlob, &mosaicError
+    );
+    if (mosaicError) mosaicError->Release();
+    if (FAILED(hr)) return -1;
+
+    hr = g_device->CreatePixelShader(
+        mosaicBlob->GetBufferPointer(), mosaicBlob->GetBufferSize(),
+        nullptr, &g_mosaicShader
+    );
+    mosaicBlob->Release();
+    if (FAILED(hr)) return -1;
+
     // Create constant buffer
     D3D11_BUFFER_DESC cbDesc = {};
     cbDesc.ByteWidth      = sizeof(ShaderUniforms);
@@ -693,6 +939,16 @@ SHADER_API int32_t engine_init() {
     overlayCbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     overlayCbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     hr = g_device->CreateBuffer(&overlayCbDesc, nullptr, &g_overlayCbuffer);
+    if (FAILED(hr)) return -1;
+
+    D3D11_BUFFER_DESC postProcessCbDesc = {};
+    postProcessCbDesc.ByteWidth = sizeof(PostProcessUniforms);
+    postProcessCbDesc.Usage = D3D11_USAGE_DYNAMIC;
+    postProcessCbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    postProcessCbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    hr = g_device->CreateBuffer(
+        &postProcessCbDesc, nullptr, &g_postProcessCbuffer
+    );
     if (FAILED(hr)) return -1;
 
     D3D11_SAMPLER_DESC samplerDesc = {};
@@ -801,7 +1057,11 @@ SHADER_API int32_t engine_show_overlay(int32_t width, int32_t height) {
 
 SHADER_API int32_t engine_render_overlay_frame(int32_t width, int32_t height) {
     std::lock_guard<std::mutex> lock(g_mutex);
-    if (!g_device || !g_context || !g_pixelShader || !g_vertexShader)
+    if (!g_device || !g_context || !g_vertexShader)
+        return -1;
+
+    const bool usePostProcess = g_postProcessEffect != 0;
+    if (!usePostProcess && !g_pixelShader)
         return -1;
 
     if (!EnsureOverlay(width, height))
@@ -812,8 +1072,13 @@ SHADER_API int32_t engine_render_overlay_frame(int32_t width, int32_t height) {
             return -1;
     }
 
-    if (!RenderUserShaderToTarget(width, height, g_rtv))
-        return -1;
+    if (usePostProcess) {
+        if (!RenderPostProcessToTarget(width, height, g_rtv))
+            return -1;
+    } else {
+        if (!RenderUserShaderToTarget(width, height, g_rtv))
+            return -1;
+    }
 
     return RenderCompositeToOverlay(width, height) ? 0 : -1;
 }
@@ -822,6 +1087,15 @@ SHADER_API void engine_set_filter_visuals(float opacity, float brightness) {
     std::lock_guard<std::mutex> lock(g_mutex);
     g_filterOpacity = std::clamp(opacity, 0.0f, 1.0f);
     g_filterBrightness = std::clamp(brightness, -1.0f, 1.0f);
+}
+
+SHADER_API void engine_set_post_process_effect(int32_t effect, float intensity) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_postProcessEffect = effect == 1 ? 1 : 0;
+    g_postProcessIntensity = std::clamp(intensity, 1.0f, 256.0f);
+    if (g_postProcessEffect == 0) {
+        ReleaseScreenCaptureResources();
+    }
 }
 
 SHADER_API void engine_hide_overlay() {
@@ -951,11 +1225,13 @@ SHADER_API void engine_shutdown() {
     ReleaseMaskResources();
     SafeRelease(g_pixelShader);
     SafeRelease(g_compositeShader);
+    SafeRelease(g_mosaicShader);
     SafeRelease(g_vertexShader);
     SafeRelease(g_inputLayout);
     SafeRelease(g_vertexBuffer);
     SafeRelease(g_cbuffer);
     SafeRelease(g_overlayCbuffer);
+    SafeRelease(g_postProcessCbuffer);
     SafeRelease(g_sampler);
     SafeRelease(g_rtv);
     SafeRelease(g_renderSrv);
@@ -965,4 +1241,6 @@ SHADER_API void engine_shutdown() {
     SafeRelease(g_device);
     g_rtWidth  = 0;
     g_rtHeight = 0;
+    g_postProcessEffect = 0;
+    g_postProcessIntensity = 24.0f;
 }

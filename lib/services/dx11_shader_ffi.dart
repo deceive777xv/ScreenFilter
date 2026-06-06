@@ -3,6 +3,7 @@ import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
+import '../models/screen_post_process_effect.dart';
 
 // ── Native function typedefs ────────────────────────────────────────────────
 
@@ -68,6 +69,11 @@ typedef _EngineSetFilterVisualsC =
 typedef _EngineSetFilterVisualsDart =
     void Function(double opacity, double brightness);
 
+typedef _EngineSetPostProcessEffectC =
+    Void Function(Int32 effect, Float intensity);
+typedef _EngineSetPostProcessEffectDart =
+    void Function(int effect, double intensity);
+
 typedef _EngineHideOverlayC = Void Function();
 typedef _EngineHideOverlayDart = void Function();
 
@@ -123,6 +129,7 @@ class DX11ShaderEngine {
   late final _EngineShowOverlayDart _showOverlay;
   late final _EngineRenderOverlayFrameDart _renderOverlayFrame;
   late final _EngineSetFilterVisualsDart _setFilterVisuals;
+  late final _EngineSetPostProcessEffectDart _setPostProcessEffect;
   late final _EngineHideOverlayDart _hideOverlay;
   late final _EngineIsOverlayActiveDart _isOverlayActive;
   late final _EngineSetRegionMaskDart _setRegionMask;
@@ -167,6 +174,11 @@ class DX11ShaderEngine {
             _EngineSetFilterVisualsC,
             _EngineSetFilterVisualsDart
           >('engine_set_filter_visuals');
+      _setPostProcessEffect = _lib
+          .lookupFunction<
+            _EngineSetPostProcessEffectC,
+            _EngineSetPostProcessEffectDart
+          >('engine_set_post_process_effect');
       _hideOverlay = _lib
           .lookupFunction<_EngineHideOverlayC, _EngineHideOverlayDart>(
             'engine_hide_overlay',
@@ -286,6 +298,14 @@ class DX11ShaderEngine {
   void setFilterVisuals({required double opacity, required double brightness}) {
     if (!_initialized) return;
     _setFilterVisuals(opacity, brightness);
+  }
+
+  void setPostProcessEffect({
+    required ScreenPostProcessEffect effect,
+    required double intensity,
+  }) {
+    if (!_initialized) return;
+    _setPostProcessEffect(effect.index, intensity);
   }
 
   void hideOverlay() {

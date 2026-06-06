@@ -75,6 +75,11 @@ SHADER_API int32_t engine_render_overlay_frame(int32_t width, int32_t height);
 /// @param brightness Brightness adjustment, clamped to -1..1.
 SHADER_API void engine_set_filter_visuals(float opacity, float brightness);
 
+/// Select a built-in screen post-processing effect.
+/// effect: 0 = none, 1 = mosaic.
+/// intensity controls effect strength; for mosaic it is the block size in pixels.
+SHADER_API void engine_set_post_process_effect(int32_t effect, float intensity);
+
 /// Hide and release native overlay resources.
 SHADER_API void engine_hide_overlay();
 

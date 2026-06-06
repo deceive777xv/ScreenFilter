@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../models/advanced_config.dart';
+import '../models/screen_post_process_effect.dart';
 import 'dx11_shader_ffi.dart';
 import 'win32_polling_service.dart';
 
@@ -43,6 +44,8 @@ class ShaderFilterService {
   double? _lastFallbackFrameTime;
   RegionMaskConfig _regionMaskConfig = RegionMaskConfig();
   String? _lastRegionMaskSignature;
+  ScreenPostProcessEffect _postProcessEffect = ScreenPostProcessEffect.none;
+  double _postProcessIntensity = 24.0;
 
   /// Output image for the fullscreen filter overlay.
   final ValueNotifier<ui.Image?> filterImageNotifier = ValueNotifier(null);
@@ -63,6 +66,8 @@ class ShaderFilterService {
   bool get isEngineReady => _engineReady;
   bool get isShaderCompiled => _shaderCompiled;
   FilterApplyMode get mode => _mode;
+  ScreenPostProcessEffect get postProcessEffect => _postProcessEffect;
+  double get postProcessIntensity => _postProcessIntensity;
   Size get screenSize => _screenSize;
   Size get filterRenderSize {
     if (_screenSize == Size.zero) return Size.zero;
@@ -77,6 +82,8 @@ class ShaderFilterService {
   double get filterBrightness => _filterBrightness;
   bool get isNativeOverlayActive =>
       _nativeOverlayActive && _engine.isOverlayActive;
+  bool get _hasRenderableFilter =>
+      _shaderCompiled || _postProcessEffect != ScreenPostProcessEffect.none;
 
   /// Notifies listeners when filter mode changes (for mutual exclusion).
   final ValueNotifier<FilterApplyMode> modeNotifier = ValueNotifier(
@@ -93,6 +100,10 @@ class ShaderFilterService {
         _engine.setFilterVisuals(
           opacity: _filterOpacity,
           brightness: _filterBrightness,
+        );
+        _engine.setPostProcessEffect(
+          effect: _postProcessEffect,
+          intensity: _postProcessIntensity,
         );
         _syncRegionMaskToEngine();
       }
@@ -207,15 +218,27 @@ class ShaderFilterService {
   void applyFilter(
     FilterApplyMode newMode,
     Size screenSize,
-    Color accentColor,
-  ) {
+    Color accentColor, {
+    ScreenPostProcessEffect postProcessEffect = ScreenPostProcessEffect.none,
+    double postProcessIntensity = 24.0,
+  }) {
     _mode = newMode;
     _lastFallbackFrameTime = null;
     _screenSize = screenSize;
     _accentColor = accentColor;
+    _postProcessEffect = newMode == FilterApplyMode.none
+        ? ScreenPostProcessEffect.none
+        : postProcessEffect;
+    _postProcessIntensity = postProcessIntensity;
     modeNotifier.value = newMode;
     _filterTimer?.cancel();
     _filterTimer = null;
+    if (_engineReady) {
+      _engine.setPostProcessEffect(
+        effect: _postProcessEffect,
+        intensity: _postProcessIntensity,
+      );
+    }
 
     if (newMode == FilterApplyMode.none) {
       _stopCursorPolling();
@@ -254,11 +277,18 @@ class ShaderFilterService {
   void stopFilter() {
     _mode = FilterApplyMode.none;
     _lastFallbackFrameTime = null;
+    _postProcessEffect = ScreenPostProcessEffect.none;
     _filterTimer?.cancel();
     _filterTimer = null;
     _stopCursorPolling();
     _replaceFilterImage(null);
     _nativeOverlayActive = false;
+    if (_engineReady) {
+      _engine.setPostProcessEffect(
+        effect: ScreenPostProcessEffect.none,
+        intensity: _postProcessIntensity,
+      );
+    }
     _engine.hideOverlay();
     modeNotifier.value = FilterApplyMode.none;
   }
@@ -292,7 +322,7 @@ class ShaderFilterService {
   }
 
   void _renderFilterFrame() {
-    if (!_engineReady || !_shaderCompiled) return;
+    if (!_engineReady || !_hasRenderableFilter) return;
     if (_screenSize == Size.zero) return;
 
     final time = _stopwatch.elapsedMilliseconds / 1000.0;
@@ -312,7 +342,7 @@ class ShaderFilterService {
     required double mouseY,
     required Color accentColor,
   }) {
-    if (!_engineReady || !_shaderCompiled) return;
+    if (!_engineReady || !_hasRenderableFilter) return;
     if (_screenSize == Size.zero) return;
 
     final renderSize = filterRenderSize;
@@ -363,12 +393,16 @@ class ShaderFilterService {
   }
 
   bool _tryStartNativeOverlay() {
-    if (!_engineReady || !_shaderCompiled) return false;
+    if (!_engineReady || !_hasRenderableFilter) return false;
     final renderSize = filterRenderSize;
     if (renderSize == Size.zero) return false;
     _engine.setFilterVisuals(
       opacity: _filterOpacity,
       brightness: _filterBrightness,
+    );
+    _engine.setPostProcessEffect(
+      effect: _postProcessEffect,
+      intensity: _postProcessIntensity,
     );
     _syncRegionMaskToEngine();
     return _engine.showOverlay(

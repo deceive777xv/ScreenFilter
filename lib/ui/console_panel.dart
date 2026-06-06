@@ -10,6 +10,7 @@ import 'widgets/screen_position_picker.dart';
 import '../models/filter_preset.dart';
 import '../models/overlay_component.dart';
 import '../models/screen_effect.dart';
+import '../models/screen_post_process_effect.dart';
 import '../models/advanced_config.dart';
 import 'sandbox/shader_sandbox_page.dart';
 import 'advanced/advanced_page.dart';
@@ -113,6 +114,7 @@ class _ConsolePanelState extends State<ConsolePanel> {
   // 屏幕特效状态
   String? _activeEffectName;
   bool _effectLoading = false;
+  static const String _mosaicEffectName = '马赛克';
 
   late List<Color> _recentColors;
 
@@ -186,6 +188,33 @@ class _ConsolePanelState extends State<ConsolePanel> {
     setState(() {
       _effectLoading = false;
       _activeEffectName = effect.name;
+      _sandboxActive = true;
+    });
+  }
+
+  Future<void> _applyMosaicPostProcess() async {
+    final svc = widget.shaderFilterService;
+    if (svc == null) return;
+    if (svc.mode != FilterApplyMode.none) svc.stopFilter();
+    setState(() {
+      _effectLoading = true;
+      _activeEffectName = null;
+    });
+
+    _clearActivePreset();
+    final media = MediaQuery.of(context);
+    final screenSize = media.size;
+    svc.updateDevicePixelRatio(media.devicePixelRatio);
+    svc.applyFilter(
+      FilterApplyMode.dynamic,
+      screenSize,
+      svc.accentColor,
+      postProcessEffect: ScreenPostProcessEffect.mosaic,
+      postProcessIntensity: 24.0,
+    );
+    setState(() {
+      _effectLoading = false;
+      _activeEffectName = _mosaicEffectName;
       _sandboxActive = true;
     });
   }
@@ -1092,6 +1121,8 @@ class _ConsolePanelState extends State<ConsolePanel> {
           const SizedBox(height: 12),
           Row(
             children: [
+              Expanded(child: _buildMosaicTile()),
+              const SizedBox(width: 8),
               for (int i = 0; i < kScreenEffects.length; i++) ...[
                 Expanded(child: _buildEffectTile(kScreenEffects[i])),
                 if (i < kScreenEffects.length - 1) const SizedBox(width: 8),
@@ -1171,6 +1202,55 @@ class _ConsolePanelState extends State<ConsolePanel> {
                       : const Color(0xFF4B5563),
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMosaicTile() {
+    final isActive = _activeEffectName == _mosaicEffectName;
+    const tileColor = Color(0xFFE0F2FE);
+    const iconColor = Color(0xFF0284C7);
+    return GestureDetector(
+      onTap: _effectLoading
+          ? null
+          : () {
+              if (isActive) {
+                _stopScreenEffect();
+              } else {
+                _applyMosaicPostProcess();
+              }
+            },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        decoration: BoxDecoration(
+          color: isActive ? tileColor : const Color(0xFFFAFAFB),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isActive ? iconColor : const Color(0xFFE5E7EB),
+            width: isActive ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.grid_view_rounded,
+              size: 20,
+              color: isActive ? iconColor : const Color(0xFF9CA3AF),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _mosaicEffectName,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                color: isActive ? iconColor : const Color(0xFF6B7280),
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),

@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:screen_filter_app/models/advanced_config.dart';
+import 'package:screen_filter_app/models/screen_post_process_effect.dart';
 import 'package:screen_filter_app/services/dx11_shader_ffi.dart';
 import 'package:screen_filter_app/services/shader_filter_service.dart';
 
@@ -85,6 +86,32 @@ void main() {
     expect(engine.lastMaskHeight, 160);
     expect(engine.lastMaskCounts, [3]);
     expect(engine.lastMaskPoints, [2.0, 4.0, 6.0, 8.0, 10.0, 12.0]);
+  });
+
+  test('applies mosaic postprocess without a compiled user shader', () {
+    final engine = _FakeDX11ShaderEngine();
+    final service = ShaderFilterService(engine: engine);
+
+    service.init();
+    service.updateScreenSize(const Size(100, 80));
+    service.applyFilter(
+      FilterApplyMode.dynamic,
+      const Size(100, 80),
+      Colors.white,
+      postProcessEffect: ScreenPostProcessEffect.mosaic,
+    );
+    service.pauseOwnTimer();
+
+    expect(service.postProcessEffect, ScreenPostProcessEffect.mosaic);
+    expect(engine.lastPostProcessEffect, ScreenPostProcessEffect.mosaic);
+    expect(engine.lastPostProcessIntensity, 24.0);
+    expect(engine.renderOverlayFrameCalls, 1);
+    expect(engine.renderFrameCalls, 0);
+
+    service.stopFilter();
+
+    expect(service.postProcessEffect, ScreenPostProcessEffect.none);
+    expect(engine.lastPostProcessEffect, ScreenPostProcessEffect.none);
   });
 
   test('throttles dynamic fullscreen fallback rendering', () {
@@ -245,6 +272,8 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
   int? lastMaskHeight;
   List<int>? lastMaskCounts;
   List<double>? lastMaskPoints;
+  ScreenPostProcessEffect? lastPostProcessEffect;
+  double? lastPostProcessIntensity;
 
   @override
   bool get isInitialized => true;
@@ -305,6 +334,15 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
   void setFilterVisuals({required double opacity, required double brightness}) {
     lastOpacity = opacity;
     lastBrightness = brightness;
+  }
+
+  @override
+  void setPostProcessEffect({
+    required ScreenPostProcessEffect effect,
+    required double intensity,
+  }) {
+    lastPostProcessEffect = effect;
+    lastPostProcessIntensity = intensity;
   }
 
   @override
