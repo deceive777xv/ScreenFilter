@@ -17,6 +17,7 @@
 static ID3D11Device*           g_device       = nullptr;
 static ID3D11DeviceContext*    g_context      = nullptr;
 static ID3D11PixelShader*      g_pixelShader  = nullptr;
+static ID3D11PixelShader*      g_previewPixelShader = nullptr;
 static ID3D11VertexShader*     g_vertexShader = nullptr;
 static ID3D11InputLayout*      g_inputLayout  = nullptr;
 static ID3D11Buffer*           g_vertexBuffer = nullptr;
@@ -98,6 +99,14 @@ struct alignas(16) PostProcessUniforms {
 };
 
 static PostProcessUniforms g_postProcessUniforms = {24.0f, {1.0f, 1.0f}, 0.0f};
+
+static int32_t CompileShaderToSlot(
+    const char* hlsl_code,
+    int32_t code_length,
+    char* error_buf,
+    int32_t error_buf_size,
+    ID3D11PixelShader*& shaderSlot
+);
 
 // ── Full-screen triangle vertex shader (compiled at init) ──────────────────
 static const char* kVertexShaderCode = R"(
@@ -708,9 +717,12 @@ static bool EnsureOverlay(int32_t width, int32_t height) {
 }
 
 static bool RenderUserShaderToTarget(
-    int32_t width, int32_t height, ID3D11RenderTargetView* target
+    ID3D11PixelShader* pixelShader,
+    int32_t width,
+    int32_t height,
+    ID3D11RenderTargetView* target
 ) {
-    if (!g_context || !g_pixelShader || !g_vertexShader || !g_cbuffer || !target) {
+    if (!g_context || !pixelShader || !g_vertexShader || !g_cbuffer || !target) {
         return false;
     }
 
@@ -735,7 +747,7 @@ static bool RenderUserShaderToTarget(
     g_context->ClearRenderTargetView(target, clearColor);
 
     g_context->VSSetShader(g_vertexShader, nullptr, 0);
-    g_context->PSSetShader(g_pixelShader, nullptr, 0);
+    g_context->PSSetShader(pixelShader, nullptr, 0);
     g_context->PSSetConstantBuffers(0, 1, &g_cbuffer);
     g_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     g_context->Draw(3, 0);
@@ -969,6 +981,40 @@ SHADER_API int32_t engine_compile_shader(
     std::lock_guard<std::mutex> lock(g_mutex);
     if (!g_device) return -1;
 
+    return CompileShaderToSlot(
+        hlsl_code,
+        code_length,
+        error_buf,
+        error_buf_size,
+        g_pixelShader
+    );
+}
+
+SHADER_API int32_t engine_compile_preview_shader(
+    const char* hlsl_code,
+    int32_t code_length,
+    char* error_buf,
+    int32_t error_buf_size
+) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (!g_device) return -1;
+
+    return CompileShaderToSlot(
+        hlsl_code,
+        code_length,
+        error_buf,
+        error_buf_size,
+        g_previewPixelShader
+    );
+}
+
+static int32_t CompileShaderToSlot(
+    const char* hlsl_code,
+    int32_t code_length,
+    char* error_buf,
+    int32_t error_buf_size,
+    ID3D11PixelShader*& shaderSlot
+) {
     if (error_buf && error_buf_size > 0) error_buf[0] = '\0';
 
     ID3DBlob* psBlob  = nullptr;
@@ -1006,8 +1052,8 @@ SHADER_API int32_t engine_compile_shader(
     psBlob->Release();
     if (FAILED(hr)) return -1;
 
-    SafeRelease(g_pixelShader);
-    g_pixelShader = newPS;
+    SafeRelease(shaderSlot);
+    shaderSlot = newPS;
     return 0;
 }
 
@@ -1040,7 +1086,21 @@ SHADER_API int32_t engine_render_frame(int32_t width, int32_t height) {
             return -1;
     }
 
-    return RenderUserShaderToTarget(width, height, g_rtv) ? 0 : -1;
+    return RenderUserShaderToTarget(g_pixelShader, width, height, g_rtv) ? 0 : -1;
+}
+
+SHADER_API int32_t engine_render_preview_frame(int32_t width, int32_t height) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (!g_device || !g_context || !g_previewPixelShader || !g_vertexShader)
+        return -1;
+
+    // Recreate render target if size changed
+    if (width != g_rtWidth || height != g_rtHeight) {
+        if (!CreateRenderTarget(width, height))
+            return -1;
+    }
+
+    return RenderUserShaderToTarget(g_previewPixelShader, width, height, g_rtv) ? 0 : -1;
 }
 
 SHADER_API int32_t engine_show_overlay(int32_t width, int32_t height) {
@@ -1072,7 +1132,7 @@ SHADER_API int32_t engine_render_overlay_frame(int32_t width, int32_t height) {
         if (!RenderPostProcessToTarget(width, height, g_rtv))
             return -1;
     } else {
-        if (!RenderUserShaderToTarget(width, height, g_rtv))
+        if (!RenderUserShaderToTarget(g_pixelShader, width, height, g_rtv))
             return -1;
     }
 
@@ -1220,6 +1280,7 @@ SHADER_API void engine_shutdown() {
     ReleaseOverlayResources();
     ReleaseMaskResources();
     SafeRelease(g_pixelShader);
+    SafeRelease(g_previewPixelShader);
     SafeRelease(g_compositeShader);
     SafeRelease(g_mosaicShader);
     SafeRelease(g_vertexShader);

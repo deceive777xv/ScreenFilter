@@ -116,7 +116,7 @@ void main() {
   });
 
   testWidgets(
-    'sandbox entry keeps an active screen effect without enabling a sandbox filter',
+    'sandbox entry compiles preview shader without replacing active screen effect',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1400, 900));
       addTearDown(() async {
@@ -140,6 +140,7 @@ void main() {
       expect(service.filterOrigin, FilterApplyOrigin.screenEffect);
       expect(service.postProcessEffect, ScreenPostProcessEffect.mosaic);
       expect(engine.compileShaderCalls, 0);
+      expect(engine.compilePreviewShaderCalls, 0);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -152,8 +153,10 @@ void main() {
       expect(service.postProcessEffect, ScreenPostProcessEffect.mosaic);
       expect(engine.lastPostProcessEffect, ScreenPostProcessEffect.mosaic);
       expect(engine.compileShaderCalls, 0);
+      expect(engine.compilePreviewShaderCalls, 1);
       expect(find.text('应用滤镜'), findsOneWidget);
       expect(find.text('动态模式'), findsNothing);
+      expect(find.text('编译成功'), findsOneWidget);
 
       service.stopFilter();
       await tester.pumpWidget(const SizedBox.shrink());
@@ -308,8 +311,10 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
   double? lastBrightness;
   int renderOverlayFrameCalls = 0;
   int renderFrameCalls = 0;
+  int renderPreviewFrameCalls = 0;
   int setUniformCalls = 0;
   int compileShaderCalls = 0;
+  int compilePreviewShaderCalls = 0;
   bool overlayActive = false;
   bool overlayCanStart = true;
   Uint8List? nextFramePixels;
@@ -335,6 +340,12 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
   }
 
   @override
+  ShaderCompileResult compilePreviewShader(String hlslCode) {
+    compilePreviewShaderCalls++;
+    return const ShaderCompileResult(success: true);
+  }
+
+  @override
   void dispose() {}
 
   @override
@@ -351,6 +362,12 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
   @override
   Uint8List? renderFrame(int width, int height) {
     renderFrameCalls++;
+    return nextFramePixels;
+  }
+
+  @override
+  Uint8List? renderPreviewFrame(int width, int height) {
+    renderPreviewFrameCalls++;
     return nextFramePixels;
   }
 

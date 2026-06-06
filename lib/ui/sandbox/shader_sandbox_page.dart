@@ -53,7 +53,6 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
   void initState() {
     super.initState();
     _currentCode = ShaderPreset.defaultShaderCode;
-    final screenEffectActive = _service.isScreenEffectActive;
     _filterMode = _service.isSandboxFilterActive
         ? _service.mode
         : FilterApplyMode.none;
@@ -63,9 +62,7 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
       _service.pauseOwnTimer();
     }
 
-    if (!screenEffectActive) {
-      _compileCurrentShader();
-    }
+    _compileCurrentShader();
     _startAnimation();
   }
 
@@ -96,9 +93,11 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
   // ── Compilation ────────────────────────────────────────────────
 
   void _compileCurrentShader() {
-    final result = _service.compileShader(_currentCode);
+    final result = _service.compilePreviewShader(_currentCode);
     if (result.success && _filterMode != FilterApplyMode.none) {
-      _reapplyActiveFilterWithCompiledShader();
+      if (!_reapplyActiveFilterWithCompiledShader()) {
+        return;
+      }
     }
     setState(() {
       _compileSuccess = result.success;
@@ -106,9 +105,10 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     });
   }
 
-  void _reapplyActiveFilterWithCompiledShader() {
+  bool _reapplyActiveFilterWithCompiledShader() {
     final screenSize = _service.screenSize;
-    if (screenSize == Size.zero) return;
+    if (screenSize == Size.zero) return true;
+    if (!_compileCurrentShaderForFullscreen()) return false;
 
     _service.applyFilter(
       _filterMode,
@@ -119,6 +119,19 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     if (_filterMode == FilterApplyMode.dynamic) {
       _service.pauseOwnTimer();
     }
+    return true;
+  }
+
+  bool _compileCurrentShaderForFullscreen() {
+    final result = _service.compileShader(_currentCode);
+    if (!result.success) {
+      setState(() {
+        _compileSuccess = false;
+        _compileError = result.errorMessage;
+      });
+      return false;
+    }
+    return true;
   }
 
   // ── Rendering ──────────────────────────────────────────────────
@@ -127,7 +140,7 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     if (!_compileSuccess) return;
 
     // 1) Render preview at small resolution.
-    final pixels = _service.renderFrame(
+    final pixels = _service.renderPreviewFrame(
       width: _previewWidth,
       height: _previewHeight,
       time: _elapsedTime,
@@ -245,6 +258,8 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
       _service.stopFilter();
       return;
     }
+
+    if (!_compileCurrentShaderForFullscreen()) return;
 
     if (mode == FilterApplyMode.static) {
       // Render one frame at screen res and freeze.

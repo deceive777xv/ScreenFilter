@@ -154,6 +154,16 @@ class ShaderFilterService {
     return result;
   }
 
+  ShaderCompileResult compilePreviewShader(String code) {
+    if (!_engineReady) {
+      return const ShaderCompileResult(
+        success: false,
+        errorMessage: 'Engine not initialized',
+      );
+    }
+    return _engine.compilePreviewShader(code);
+  }
+
   // ── Preview rendering (called by sandbox page) ───────────────
 
   /// Render a frame at the given resolution.  Returns RGBA pixel
@@ -176,6 +186,26 @@ class ShaderFilterService {
       accentColor: accentColor,
     );
     return _engine.renderFrame(width, height);
+  }
+
+  Uint8List? renderPreviewFrame({
+    required int width,
+    required int height,
+    required double time,
+    required double mouseX,
+    required double mouseY,
+    required Color accentColor,
+  }) {
+    if (!_engineReady) return null;
+    _setUniforms(
+      time: time,
+      width: width,
+      height: height,
+      mouseX: mouseX,
+      mouseY: mouseY,
+      accentColor: accentColor,
+    );
+    return _engine.renderPreviewFrame(width, height);
   }
 
   // ── Fullscreen filter ────────────────────────────────────────

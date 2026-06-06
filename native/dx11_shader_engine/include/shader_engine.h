@@ -29,6 +29,15 @@ SHADER_API int32_t engine_compile_shader(
     int32_t error_buf_size
 );
 
+/// Compile an HLSL pixel shader for sandbox preview rendering.
+/// Does not replace the fullscreen filter shader.
+SHADER_API int32_t engine_compile_preview_shader(
+    const char* hlsl_code,
+    int32_t code_length,
+    char* error_buf,
+    int32_t error_buf_size
+);
+
 /// Set uniform values for the next render call.
 /// @param time          Elapsed time in seconds.
 /// @param resolution_x  Viewport width.
@@ -51,6 +60,12 @@ SHADER_API void engine_set_uniforms(
 /// @param height  Render target height in pixels.
 /// @return 0 on success, non-zero on failure.
 SHADER_API int32_t engine_render_frame(int32_t width, int32_t height);
+
+/// Render one sandbox preview frame to the internal render target.
+/// @param width   Render target width in pixels.
+/// @param height  Render target height in pixels.
+/// @return 0 on success, non-zero on failure.
+SHADER_API int32_t engine_render_preview_frame(int32_t width, int32_t height);
 
 /// Copy the rendered frame data into a caller-provided RGBA buffer.
 /// @param out_pixels  Caller-allocated buffer (width * height * 4 bytes).

@@ -123,8 +123,10 @@ class DX11ShaderEngine {
 
   late final _EngineInitDart _init;
   late final _EngineCompileShaderDart _compileShader;
+  late final _EngineCompileShaderDart _compilePreviewShader;
   late final _EngineSetUniformsDart _setUniforms;
   late final _EngineRenderFrameDart _renderFrame;
+  late final _EngineRenderFrameDart _renderPreviewFrame;
   late final _EngineGetFramePixelsDart _getFramePixels;
   late final _EngineShowOverlayDart _showOverlay;
   late final _EngineRenderOverlayFrameDart _renderOverlayFrame;
@@ -148,6 +150,10 @@ class DX11ShaderEngine {
           .lookupFunction<_EngineCompileShaderC, _EngineCompileShaderDart>(
             'engine_compile_shader',
           );
+      _compilePreviewShader = _lib
+          .lookupFunction<_EngineCompileShaderC, _EngineCompileShaderDart>(
+            'engine_compile_preview_shader',
+          );
       _setUniforms = _lib
           .lookupFunction<_EngineSetUniformsC, _EngineSetUniformsDart>(
             'engine_set_uniforms',
@@ -155,6 +161,10 @@ class DX11ShaderEngine {
       _renderFrame = _lib
           .lookupFunction<_EngineRenderFrameC, _EngineRenderFrameDart>(
             'engine_render_frame',
+          );
+      _renderPreviewFrame = _lib
+          .lookupFunction<_EngineRenderFrameC, _EngineRenderFrameDart>(
+            'engine_render_preview_frame',
           );
       _getFramePixels = _lib
           .lookupFunction<_EngineGetFramePixelsC, _EngineGetFramePixelsDart>(
@@ -211,6 +221,18 @@ class DX11ShaderEngine {
 
   /// Compile an HLSL pixel shader and return compilation result.
   ShaderCompileResult compileShader(String hlslCode) {
+    return _compileShaderWith(hlslCode, _compileShader);
+  }
+
+  /// Compile an HLSL pixel shader for sandbox preview rendering only.
+  ShaderCompileResult compilePreviewShader(String hlslCode) {
+    return _compileShaderWith(hlslCode, _compilePreviewShader);
+  }
+
+  ShaderCompileResult _compileShaderWith(
+    String hlslCode,
+    _EngineCompileShaderDart compile,
+  ) {
     if (!_initialized) {
       return const ShaderCompileResult(
         success: false,
@@ -224,7 +246,7 @@ class DX11ShaderEngine {
     final errorBuf = calloc<Uint8>(errorBufSize);
 
     try {
-      final result = _compileShader(
+      final result = compile(
         codePtr.cast(),
         codeUtf8Length,
         errorBuf.cast(),
@@ -271,9 +293,22 @@ class DX11ShaderEngine {
 
   /// Render a frame and return the RGBA pixel data.
   Uint8List? renderFrame(int width, int height) {
+    return _renderFrameWith(width, height, _renderFrame);
+  }
+
+  /// Render the sandbox preview shader and return RGBA pixel data.
+  Uint8List? renderPreviewFrame(int width, int height) {
+    return _renderFrameWith(width, height, _renderPreviewFrame);
+  }
+
+  Uint8List? _renderFrameWith(
+    int width,
+    int height,
+    _EngineRenderFrameDart render,
+  ) {
     if (!_initialized) return null;
 
-    final result = _renderFrame(width, height);
+    final result = render(width, height);
     if (result != 0) return null;
 
     final bufferSize = width * height * 4;

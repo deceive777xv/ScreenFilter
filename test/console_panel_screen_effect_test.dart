@@ -82,6 +82,7 @@ void main() {
 class _FakeDX11ShaderEngine implements DX11ShaderEngine {
   bool overlayActive = false;
   int compileShaderCalls = 0;
+  int compilePreviewShaderCalls = 0;
   ScreenPostProcessEffect? lastPostProcessEffect;
   double? lastPostProcessIntensity;
 
@@ -94,6 +95,12 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
   @override
   ShaderCompileResult compileShader(String hlslCode) {
     compileShaderCalls++;
+    return const ShaderCompileResult(success: true);
+  }
+
+  @override
+  ShaderCompileResult compilePreviewShader(String hlslCode) {
+    compilePreviewShaderCalls++;
     return const ShaderCompileResult(success: true);
   }
 
@@ -113,6 +120,9 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
 
   @override
   Uint8List? renderFrame(int width, int height) => null;
+
+  @override
+  Uint8List? renderPreviewFrame(int width, int height) => null;
 
   @override
   bool renderOverlayFrame(int width, int height) => overlayActive;
