@@ -13,6 +13,25 @@ void main() {
     );
   });
 
+  test('clears the base shader surface when a loaded filter is turned off', () {
+    expect(
+      shouldClearBaseShaderSurface(
+        shaderLoaded: true,
+        sandboxActive: false,
+        baseFilterEnabled: false,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldClearBaseShaderSurface(
+        shaderLoaded: true,
+        sandboxActive: true,
+        baseFilterEnabled: false,
+      ),
+      isFalse,
+    );
+  });
+
   test('paints base shader only when loaded, active, and not sandboxed', () {
     expect(
       shouldPaintBaseShader(

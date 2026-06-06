@@ -6,6 +6,14 @@ bool shouldPaintBaseShader({
   return shaderLoaded && !sandboxActive && baseFilterEnabled;
 }
 
+bool shouldClearBaseShaderSurface({
+  required bool shaderLoaded,
+  required bool sandboxActive,
+  required bool baseFilterEnabled,
+}) {
+  return shaderLoaded && !sandboxActive && !baseFilterEnabled;
+}
+
 class BaseShaderPaintState {
   const BaseShaderPaintState({
     required this.width,

@@ -20,7 +20,6 @@ import 'services/automation_preset_controller.dart';
 import 'services/console_hotkey_service.dart';
 import 'services/debounced_action.dart';
 import 'services/filter_overlay_logic.dart';
-import 'services/fullscreen_window_refresh.dart';
 import 'services/keyed_debounced_action.dart';
 import 'services/settings_service.dart';
 import 'services/shader_filter_service.dart';
@@ -46,7 +45,6 @@ void main() async {
   windowManager.waitUntilReadyToShow(windowOptions, () async {
     await windowManager.show();
     await windowManager.setFullScreen(true);
-    await refreshFullscreenWindowMetrics();
     await windowManager.setIgnoreMouseEvents(true);
   });
 
@@ -281,8 +279,6 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       setState(() => _isPanelOpen = false);
       await windowManager.setIgnoreMouseEvents(true);
     } else {
-      await refreshFullscreenWindowMetrics();
-      if (!mounted) return;
       setState(() => _isPanelOpen = true);
       await windowManager.setIgnoreMouseEvents(false);
     }
@@ -905,6 +901,16 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       sandboxActive: sandboxActive,
       baseFilterEnabled: _baseFilterEnabled,
     )) {
+      if (shouldClearBaseShaderSurface(
+        shaderLoaded: _shader != null,
+        sandboxActive: sandboxActive,
+        baseFilterEnabled: _baseFilterEnabled,
+      )) {
+        return const CustomPaint(
+          size: Size.infinite,
+          painter: TransparentSurfacePainter(),
+        );
+      }
       return const SizedBox();
     }
 
@@ -1014,4 +1020,21 @@ class ShaderPainter extends CustomPainter {
   bool shouldRepaint(covariant ShaderPainter oldDelegate) =>
       !identical(oldDelegate.shader, shader) ||
       state.shouldRepaint(oldDelegate.state);
+}
+
+class TransparentSurfacePainter extends CustomPainter {
+  const TransparentSurfacePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..color = Colors.transparent
+        ..blendMode = BlendMode.src,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant TransparentSurfacePainter oldDelegate) => false;
 }
