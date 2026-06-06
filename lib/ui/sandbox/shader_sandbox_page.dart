@@ -53,7 +53,12 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
   void initState() {
     super.initState();
     _currentCode = ShaderPreset.defaultShaderCode;
-    _filterMode = _service.mode;
+    if (_service.isScreenEffectActive) {
+      _service.stopFilter();
+    }
+    _filterMode = _service.isSandboxFilterActive
+        ? _service.mode
+        : FilterApplyMode.none;
     _accentColor = _service.accentColor;
 
     // We take over rendering while the page is alive.
@@ -104,7 +109,12 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     final screenSize = _service.screenSize;
     if (screenSize == Size.zero) return;
 
-    _service.applyFilter(_filterMode, screenSize, _accentColor);
+    _service.applyFilter(
+      _filterMode,
+      screenSize,
+      _accentColor,
+      origin: FilterApplyOrigin.sandbox,
+    );
     if (_filterMode == FilterApplyMode.dynamic) {
       _service.pauseOwnTimer();
     }
@@ -237,7 +247,12 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
 
     if (mode == FilterApplyMode.static) {
       // Render one frame at screen res and freeze.
-      _service.applyFilter(FilterApplyMode.static, screenSize, _accentColor);
+      _service.applyFilter(
+        FilterApplyMode.static,
+        screenSize,
+        _accentColor,
+        origin: FilterApplyOrigin.sandbox,
+      );
       // Also do a local render so the notifier gets a screen-res image.
       if (_compileSuccess && !_service.isNativeOverlayActive) {
         final renderSize = _service.filterRenderSize;
@@ -259,7 +274,12 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     }
 
     // Dynamic — service knows, but while we're alive we render.
-    _service.applyFilter(FilterApplyMode.dynamic, screenSize, _accentColor);
+    _service.applyFilter(
+      FilterApplyMode.dynamic,
+      screenSize,
+      _accentColor,
+      origin: FilterApplyOrigin.sandbox,
+    );
     _service.pauseOwnTimer(); // we handle it
   }
 

@@ -10,6 +10,15 @@ import 'win32_polling_service.dart';
 /// Filter apply mode.
 enum FilterApplyMode { none, static, dynamic }
 
+/// Indicates which feature currently owns the fullscreen DX11 filter.
+enum FilterApplyOrigin { none, sandbox, screenEffect }
+
+class FilterModeNotifier extends ValueNotifier<FilterApplyMode> {
+  FilterModeNotifier(super.value);
+
+  void notifyStateChanged() => notifyListeners();
+}
+
 typedef FilterImageDecoder =
     Future<ui.Image> Function(Uint8List pixels, int width, int height);
 
@@ -51,6 +60,7 @@ class ShaderFilterService {
   final ValueNotifier<ui.Image?> filterImageNotifier = ValueNotifier(null);
 
   FilterApplyMode _mode = FilterApplyMode.none;
+  FilterApplyOrigin _filterOrigin = FilterApplyOrigin.none;
   Timer? _filterTimer;
   Win32PollingRelease? _cursorPollingRelease;
   final Stopwatch _stopwatch = Stopwatch();
@@ -66,6 +76,13 @@ class ShaderFilterService {
   bool get isEngineReady => _engineReady;
   bool get isShaderCompiled => _shaderCompiled;
   FilterApplyMode get mode => _mode;
+  FilterApplyOrigin get filterOrigin => _filterOrigin;
+  bool get isSandboxFilterActive =>
+      _mode != FilterApplyMode.none &&
+      _filterOrigin == FilterApplyOrigin.sandbox;
+  bool get isScreenEffectActive =>
+      _mode != FilterApplyMode.none &&
+      _filterOrigin == FilterApplyOrigin.screenEffect;
   ScreenPostProcessEffect get postProcessEffect => _postProcessEffect;
   double get postProcessIntensity => _postProcessIntensity;
   Size get screenSize => _screenSize;
@@ -86,7 +103,7 @@ class ShaderFilterService {
       _shaderCompiled || _postProcessEffect != ScreenPostProcessEffect.none;
 
   /// Notifies listeners when filter mode changes (for mutual exclusion).
-  final ValueNotifier<FilterApplyMode> modeNotifier = ValueNotifier(
+  final FilterModeNotifier modeNotifier = FilterModeNotifier(
     FilterApplyMode.none,
   );
 
@@ -221,7 +238,12 @@ class ShaderFilterService {
     Color accentColor, {
     ScreenPostProcessEffect postProcessEffect = ScreenPostProcessEffect.none,
     double postProcessIntensity = 24.0,
+    FilterApplyOrigin? origin,
   }) {
+    final previousMode = _mode;
+    final previousOrigin = _filterOrigin;
+    final previousPostProcessEffect = _postProcessEffect;
+    final previousPostProcessIntensity = _postProcessIntensity;
     _mode = newMode;
     _lastFallbackFrameTime = null;
     _screenSize = screenSize;
@@ -230,7 +252,17 @@ class ShaderFilterService {
         ? ScreenPostProcessEffect.none
         : postProcessEffect;
     _postProcessIntensity = postProcessIntensity;
-    modeNotifier.value = newMode;
+    _filterOrigin = _resolveFilterOrigin(
+      mode: newMode,
+      origin: origin,
+      postProcessEffect: _postProcessEffect,
+    );
+    _notifyFilterStateChanged(
+      previousMode: previousMode,
+      previousOrigin: previousOrigin,
+      previousPostProcessEffect: previousPostProcessEffect,
+      previousPostProcessIntensity: previousPostProcessIntensity,
+    );
     _filterTimer?.cancel();
     _filterTimer = null;
     if (_engineReady) {
@@ -275,7 +307,12 @@ class ShaderFilterService {
 
   /// Stop the filter.
   void stopFilter() {
+    final previousMode = _mode;
+    final previousOrigin = _filterOrigin;
+    final previousPostProcessEffect = _postProcessEffect;
+    final previousPostProcessIntensity = _postProcessIntensity;
     _mode = FilterApplyMode.none;
+    _filterOrigin = FilterApplyOrigin.none;
     _lastFallbackFrameTime = null;
     _postProcessEffect = ScreenPostProcessEffect.none;
     _filterTimer?.cancel();
@@ -290,7 +327,12 @@ class ShaderFilterService {
       );
     }
     _engine.hideOverlay();
-    modeNotifier.value = FilterApplyMode.none;
+    _notifyFilterStateChanged(
+      previousMode: previousMode,
+      previousOrigin: previousOrigin,
+      previousPostProcessEffect: previousPostProcessEffect,
+      previousPostProcessIntensity: previousPostProcessIntensity,
+    );
   }
 
   void updateFallbackImage(ui.Image? image) {
@@ -313,6 +355,36 @@ class ShaderFilterService {
   }
 
   // ── Internal ─────────────────────────────────────────────────
+
+  FilterApplyOrigin _resolveFilterOrigin({
+    required FilterApplyMode mode,
+    required FilterApplyOrigin? origin,
+    required ScreenPostProcessEffect postProcessEffect,
+  }) {
+    if (mode == FilterApplyMode.none) return FilterApplyOrigin.none;
+    if (origin != null) return origin;
+    return postProcessEffect == ScreenPostProcessEffect.none
+        ? FilterApplyOrigin.sandbox
+        : FilterApplyOrigin.screenEffect;
+  }
+
+  void _notifyFilterStateChanged({
+    required FilterApplyMode previousMode,
+    required FilterApplyOrigin previousOrigin,
+    required ScreenPostProcessEffect previousPostProcessEffect,
+    required double previousPostProcessIntensity,
+  }) {
+    if (modeNotifier.value != _mode) {
+      modeNotifier.value = _mode;
+      return;
+    }
+    if (previousMode != _mode ||
+        previousOrigin != _filterOrigin ||
+        previousPostProcessEffect != _postProcessEffect ||
+        previousPostProcessIntensity != _postProcessIntensity) {
+      modeNotifier.notifyStateChanged();
+    }
+  }
 
   void _startFilterTimer() {
     _filterTimer?.cancel();

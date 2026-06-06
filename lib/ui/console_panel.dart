@@ -53,6 +53,7 @@ class ConsolePanel extends StatefulWidget {
   final Function(Color) onBaseColorChanged;
   final VoidCallback onClose;
   final Function(String)? onFontFamilyChanged;
+  final bool enableSystemProbes;
 
   const ConsolePanel({
     super.key,
@@ -84,6 +85,7 @@ class ConsolePanel extends StatefulWidget {
     required this.onBaseColorChanged,
     required this.onClose,
     this.onFontFamilyChanged,
+    this.enableSystemProbes = true,
   });
 
   @override
@@ -137,12 +139,22 @@ class _ConsolePanelState extends State<ConsolePanel> {
     super.initState();
     _recentColors = widget.settingsService.getRecentColors();
     _activePresetName = widget.settingsService.getActivePreset();
-    _sandboxActive = widget.shaderFilterService?.mode != FilterApplyMode.none;
-    if (_sandboxActive) _activePresetName = null;
+    final svc = widget.shaderFilterService;
+    final filterActive = svc != null && svc.mode != FilterApplyMode.none;
+    _sandboxActive = svc?.isSandboxFilterActive ?? false;
+    if (filterActive) _activePresetName = null;
+    if ((svc?.isScreenEffectActive ?? false) &&
+        svc?.postProcessEffect == ScreenPostProcessEffect.mosaic) {
+      _activeEffectName = _mosaicEffectName;
+    }
     widget.shaderFilterService?.modeNotifier.addListener(_onSandboxModeChanged);
-    _loadSystemFonts();
     _selectedFont = widget.settingsService.getFontFamily();
-    _detectStartupEnabled();
+    if (widget.enableSystemProbes) {
+      _loadSystemFonts();
+      _detectStartupEnabled();
+    } else {
+      _startupLoading = false;
+    }
   }
 
   @override
@@ -154,17 +166,21 @@ class _ConsolePanelState extends State<ConsolePanel> {
   }
 
   void _onSandboxModeChanged() {
-    final active = widget.shaderFilterService?.mode != FilterApplyMode.none;
-    if (active) _clearActivePreset();
-    if (!active) {
-      // Filter stopped externally (sandbox page); clear effect highlight
-      setState(() {
-        _sandboxActive = false;
-        _activeEffectName = null;
-      });
-    } else {
-      setState(() => _sandboxActive = true);
+    final svc = widget.shaderFilterService;
+    final active = svc != null && svc.mode != FilterApplyMode.none;
+    if (active && _activePresetName != null) {
+      _activePresetName = null;
+      widget.settingsService.setActivePreset(null);
     }
+    final origin = active ? svc.filterOrigin : FilterApplyOrigin.none;
+    setState(() {
+      _sandboxActive = origin == FilterApplyOrigin.sandbox;
+      if (!active || origin == FilterApplyOrigin.sandbox) {
+        _activeEffectName = null;
+      } else if (svc.postProcessEffect == ScreenPostProcessEffect.mosaic) {
+        _activeEffectName ??= _mosaicEffectName;
+      }
+    });
   }
 
   Future<void> _applyScreenEffect(ScreenEffect effect) async {
@@ -184,11 +200,16 @@ class _ConsolePanelState extends State<ConsolePanel> {
     final media = MediaQuery.of(context);
     final screenSize = media.size;
     svc.updateDevicePixelRatio(media.devicePixelRatio);
-    svc.applyFilter(FilterApplyMode.dynamic, screenSize, svc.accentColor);
+    svc.applyFilter(
+      FilterApplyMode.dynamic,
+      screenSize,
+      svc.accentColor,
+      origin: FilterApplyOrigin.screenEffect,
+    );
     setState(() {
       _effectLoading = false;
       _activeEffectName = effect.name;
-      _sandboxActive = true;
+      _sandboxActive = false;
     });
   }
 
@@ -211,11 +232,12 @@ class _ConsolePanelState extends State<ConsolePanel> {
       svc.accentColor,
       postProcessEffect: ScreenPostProcessEffect.mosaic,
       postProcessIntensity: 24.0,
+      origin: FilterApplyOrigin.screenEffect,
     );
     setState(() {
       _effectLoading = false;
       _activeEffectName = _mosaicEffectName;
-      _sandboxActive = true;
+      _sandboxActive = false;
     });
   }
 
@@ -224,6 +246,21 @@ class _ConsolePanelState extends State<ConsolePanel> {
     setState(() {
       _activeEffectName = null;
       _sandboxActive = false;
+    });
+  }
+
+  void _selectMenu(int index) {
+    final enteringSandbox = _menus[index] == '沙盒';
+    final svc = widget.shaderFilterService;
+    if (enteringSandbox && (svc?.isScreenEffectActive ?? false)) {
+      svc!.stopFilter();
+    }
+    setState(() {
+      _selectedIndex = index;
+      if (enteringSandbox) {
+        _activeEffectName = null;
+        _sandboxActive = svc?.isSandboxFilterActive ?? false;
+      }
     });
   }
 
@@ -419,9 +456,7 @@ class _ConsolePanelState extends State<ConsolePanel> {
                   message: _menus[index],
                   child: InkWell(
                     onTap: () {
-                      setState(() {
-                        _selectedIndex = index;
-                      });
+                      _selectMenu(index);
                     },
                     child: Container(
                       margin: const EdgeInsets.symmetric(
@@ -1210,7 +1245,7 @@ class _ConsolePanelState extends State<ConsolePanel> {
   }
 
   Widget _buildMosaicTile() {
-    final isActive = _activeEffectName == _mosaicEffectName;
+    final isActive = !_sandboxActive && _activeEffectName == _mosaicEffectName;
     const tileColor = Color(0xFFE0F2FE);
     const iconColor = Color(0xFF0284C7);
     return GestureDetector(
@@ -1259,7 +1294,7 @@ class _ConsolePanelState extends State<ConsolePanel> {
   }
 
   Widget _buildEffectTile(ScreenEffect effect) {
-    final isActive = _activeEffectName == effect.name;
+    final isActive = !_sandboxActive && _activeEffectName == effect.name;
     return GestureDetector(
       onTap: _effectLoading
           ? null

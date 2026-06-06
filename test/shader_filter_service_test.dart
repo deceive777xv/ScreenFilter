@@ -115,45 +115,45 @@ void main() {
     expect(engine.lastPostProcessEffect, ScreenPostProcessEffect.none);
   });
 
-  testWidgets('sandbox entry replaces an active mosaic postprocess filter', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(1400, 900));
-    addTearDown(() async {
-      await tester.binding.setSurfaceSize(null);
-    });
+  testWidgets(
+    'sandbox entry stops an active screen effect without enabling a sandbox filter',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1400, 900));
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+      });
 
-    final engine = _FakeDX11ShaderEngine();
-    final service = ShaderFilterService(engine: engine);
+      final engine = _FakeDX11ShaderEngine();
+      final service = ShaderFilterService(engine: engine);
 
-    service.init();
-    service.updateScreenSize(const Size(100, 80));
-    service.applyFilter(
-      FilterApplyMode.dynamic,
-      const Size(100, 80),
-      Colors.white,
-      postProcessEffect: ScreenPostProcessEffect.mosaic,
-    );
-    service.pauseOwnTimer();
+      service.init();
+      service.updateScreenSize(const Size(100, 80));
+      service.applyFilter(
+        FilterApplyMode.dynamic,
+        const Size(100, 80),
+        Colors.white,
+        postProcessEffect: ScreenPostProcessEffect.mosaic,
+      );
+      service.pauseOwnTimer();
 
-    expect(service.mode, FilterApplyMode.dynamic);
-    expect(service.postProcessEffect, ScreenPostProcessEffect.mosaic);
+      expect(service.mode, FilterApplyMode.dynamic);
+      expect(service.postProcessEffect, ScreenPostProcessEffect.mosaic);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: ShaderSandboxPage(service: service),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: ShaderSandboxPage(service: service)),
         ),
-      ),
-    );
+      );
 
-    expect(service.mode, FilterApplyMode.dynamic);
-    expect(service.postProcessEffect, ScreenPostProcessEffect.none);
-    expect(engine.lastPostProcessEffect, ScreenPostProcessEffect.none);
+      expect(service.mode, FilterApplyMode.none);
+      expect(service.postProcessEffect, ScreenPostProcessEffect.none);
+      expect(engine.lastPostProcessEffect, ScreenPostProcessEffect.none);
+      expect(find.text('应用滤镜'), findsOneWidget);
+      expect(find.text('动态模式'), findsNothing);
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    service.stopFilter();
-  });
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   test('throttles dynamic fullscreen fallback rendering', () {
     final engine = _FakeDX11ShaderEngine()
