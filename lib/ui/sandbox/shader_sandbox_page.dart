@@ -20,6 +20,9 @@ class ShaderSandboxPage extends StatefulWidget {
 }
 
 class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
+  static const double _sandboxFilterBrightness = 0.5;
+  static const double _sandboxFilterOpacity = 0.5;
+
   ShaderFilterService get _service => widget.service;
 
   // ── Code state ─────────────────────────────────────────────────
@@ -260,6 +263,11 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     }
 
     if (!_compileCurrentShaderForFullscreen()) return;
+
+    _service.updateFilterVisuals(
+      opacity: _sandboxFilterOpacity,
+      brightness: _sandboxFilterBrightness,
+    );
 
     if (mode == FilterApplyMode.static) {
       // Render one frame at screen res and freeze.

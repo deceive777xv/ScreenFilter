@@ -163,6 +163,41 @@ void main() {
     },
   );
 
+  testWidgets('applying a sandbox shader uses sandbox visual defaults', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+    });
+
+    final engine = _FakeDX11ShaderEngine();
+    final service = ShaderFilterService(engine: engine);
+
+    service.init();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ShaderSandboxPage(service: service)),
+      ),
+    );
+
+    expect(find.text('编译成功'), findsOneWidget);
+
+    await tester.tap(find.text('动态'));
+    await tester.pump();
+
+    expect(service.mode, FilterApplyMode.dynamic);
+    expect(service.filterOrigin, FilterApplyOrigin.sandbox);
+    expect(service.filterBrightness, 0.5);
+    expect(service.filterOpacity, 0.5);
+    expect(engine.lastBrightness, 0.5);
+    expect(engine.lastOpacity, 0.5);
+
+    service.stopFilter();
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   test('throttles dynamic fullscreen fallback rendering', () {
     final engine = _FakeDX11ShaderEngine()
       ..overlayCanStart = false

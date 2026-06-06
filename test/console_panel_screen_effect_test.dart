@@ -160,6 +160,151 @@ void main() {
       expect(settings.getActivePreset(), '清除');
     },
   );
+
+  testWidgets('mosaic screen effect applies mosaic visual defaults', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+    });
+
+    SharedPreferences.setMockInitialValues({});
+    final settings = await SettingsService.init();
+    final engine = _FakeDX11ShaderEngine();
+    final service = ShaderFilterService(engine: engine)..init();
+    double? lastAlpha;
+    double? lastBrightness;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ConsolePanel(
+            brightness: 0,
+            alpha: 1,
+            baseColor: Colors.transparent,
+            settingsService: settings,
+            clockComponent: OverlayComponent.createClock(),
+            sloganComponent: OverlayComponent.createSlogan(),
+            watermarkComponent: OverlayComponent.createWatermark(),
+            onOverlayChanged: (_) {},
+            shaderFilterService: service,
+            focusModeConfig: FocusModeConfig(),
+            spotlightConfig: SpotlightConfig(),
+            automationRules: const [],
+            automationEnabled: false,
+            consoleHotkeyConfig: const ConsoleHotkeyConfig(),
+            onFocusModeChanged: (_) {},
+            onSpotlightChanged: (_) {},
+            onConsoleHotkeyChanged: (_) {},
+            regionMaskConfig: RegionMaskConfig(),
+            onRegionMaskChanged: (_) {},
+            onStartDrawingRegion: () {},
+            onAutomationRulesChanged: (_) {},
+            onAutomationEnabledChanged: (_) {},
+            onBrightnessChanged: (value) => lastBrightness = value,
+            onAlphaChanged: (value) => lastAlpha = value,
+            onBaseColorChanged: (_) {},
+            onClose: () {},
+            enableSystemProbes: false,
+          ),
+        ),
+      ),
+    );
+
+    await _openFilterPageAndRevealScreenEffects(tester);
+    await tester.tap(find.byIcon(Icons.grid_view_rounded));
+    await tester.pump();
+
+    expect(service.mode, FilterApplyMode.dynamic);
+    expect(service.postProcessEffect, ScreenPostProcessEffect.mosaic);
+    expect(lastBrightness, -0.5);
+    expect(lastAlpha, 0.85);
+    expect(service.filterBrightness, -0.5);
+    expect(service.filterOpacity, 0.85);
+    expect(engine.lastBrightness, -0.5);
+    expect(engine.lastOpacity, 0.85);
+
+    service.stopFilter();
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('built-in screen effects keep neutral visual defaults', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+    });
+
+    SharedPreferences.setMockInitialValues({});
+    final settings = await SettingsService.init();
+    final engine = _FakeDX11ShaderEngine();
+    final service = ShaderFilterService(engine: engine)..init();
+    double? lastAlpha;
+    double? lastBrightness;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ConsolePanel(
+            brightness: -0.5,
+            alpha: 0.85,
+            baseColor: Colors.transparent,
+            settingsService: settings,
+            clockComponent: OverlayComponent.createClock(),
+            sloganComponent: OverlayComponent.createSlogan(),
+            watermarkComponent: OverlayComponent.createWatermark(),
+            onOverlayChanged: (_) {},
+            shaderFilterService: service,
+            focusModeConfig: FocusModeConfig(),
+            spotlightConfig: SpotlightConfig(),
+            automationRules: const [],
+            automationEnabled: false,
+            consoleHotkeyConfig: const ConsoleHotkeyConfig(),
+            onFocusModeChanged: (_) {},
+            onSpotlightChanged: (_) {},
+            onConsoleHotkeyChanged: (_) {},
+            regionMaskConfig: RegionMaskConfig(),
+            onRegionMaskChanged: (_) {},
+            onStartDrawingRegion: () {},
+            onAutomationRulesChanged: (_) {},
+            onAutomationEnabledChanged: (_) {},
+            onBrightnessChanged: (value) => lastBrightness = value,
+            onAlphaChanged: (value) => lastAlpha = value,
+            onBaseColorChanged: (_) {},
+            onClose: () {},
+            enableSystemProbes: false,
+          ),
+        ),
+      ),
+    );
+
+    await _openFilterPageAndRevealScreenEffects(tester);
+    await tester.tap(find.byIcon(Icons.ac_unit_rounded));
+    await tester.pump();
+
+    expect(service.mode, FilterApplyMode.dynamic);
+    expect(service.postProcessEffect, ScreenPostProcessEffect.none);
+    expect(lastBrightness, 0.0);
+    expect(lastAlpha, 1.0);
+    expect(service.filterBrightness, 0.0);
+    expect(service.filterOpacity, 1.0);
+    expect(engine.lastBrightness, 0.0);
+    expect(engine.lastOpacity, 1.0);
+
+    service.stopFilter();
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+}
+
+Future<void> _openFilterPageAndRevealScreenEffects(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('滤镜'));
+  await tester.pump();
+  for (var i = 0; i < 3; i++) {
+    await tester.drag(find.byType(ListView).last, const Offset(0, -350));
+    await tester.pump();
+  }
 }
 
 class _FakeDX11ShaderEngine implements DX11ShaderEngine {
@@ -168,6 +313,8 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
   int compilePreviewShaderCalls = 0;
   ScreenPostProcessEffect? lastPostProcessEffect;
   double? lastPostProcessIntensity;
+  double? lastOpacity;
+  double? lastBrightness;
 
   @override
   bool get isInitialized => true;
@@ -223,10 +370,10 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
   }
 
   @override
-  void setFilterVisuals({
-    required double opacity,
-    required double brightness,
-  }) {}
+  void setFilterVisuals({required double opacity, required double brightness}) {
+    lastOpacity = opacity;
+    lastBrightness = brightness;
+  }
 
   @override
   void setPostProcessEffect({

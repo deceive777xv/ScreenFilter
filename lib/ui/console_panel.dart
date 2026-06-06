@@ -117,6 +117,10 @@ class _ConsolePanelState extends State<ConsolePanel> {
   String? _activeEffectName;
   bool _effectLoading = false;
   static const String _mosaicEffectName = '马赛克';
+  static const double _mosaicEffectBrightness = -0.5;
+  static const double _mosaicEffectAlpha = 0.85;
+  static const double _screenEffectBrightness = 0.0;
+  static const double _screenEffectAlpha = 1.0;
 
   late List<Color> _recentColors;
 
@@ -200,6 +204,11 @@ class _ConsolePanelState extends State<ConsolePanel> {
     final media = MediaQuery.of(context);
     final screenSize = media.size;
     svc.updateDevicePixelRatio(media.devicePixelRatio);
+    _applyFilterVisualDefaults(
+      svc,
+      brightness: _screenEffectBrightness,
+      alpha: _screenEffectAlpha,
+    );
     svc.applyFilter(
       FilterApplyMode.dynamic,
       screenSize,
@@ -226,6 +235,11 @@ class _ConsolePanelState extends State<ConsolePanel> {
     final media = MediaQuery.of(context);
     final screenSize = media.size;
     svc.updateDevicePixelRatio(media.devicePixelRatio);
+    _applyFilterVisualDefaults(
+      svc,
+      brightness: _mosaicEffectBrightness,
+      alpha: _mosaicEffectAlpha,
+    );
     svc.applyFilter(
       FilterApplyMode.dynamic,
       screenSize,
@@ -239,6 +253,16 @@ class _ConsolePanelState extends State<ConsolePanel> {
       _activeEffectName = _mosaicEffectName;
       _sandboxActive = false;
     });
+  }
+
+  void _applyFilterVisualDefaults(
+    ShaderFilterService svc, {
+    required double brightness,
+    required double alpha,
+  }) {
+    widget.onBrightnessChanged(brightness);
+    widget.onAlphaChanged(alpha);
+    svc.updateFilterVisuals(opacity: alpha, brightness: brightness);
   }
 
   void _stopScreenEffect() {
