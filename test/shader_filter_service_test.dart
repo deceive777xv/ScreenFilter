@@ -7,6 +7,7 @@ import 'package:screen_filter_app/models/advanced_config.dart';
 import 'package:screen_filter_app/models/screen_post_process_effect.dart';
 import 'package:screen_filter_app/services/dx11_shader_ffi.dart';
 import 'package:screen_filter_app/services/shader_filter_service.dart';
+import 'package:screen_filter_app/ui/sandbox/shader_sandbox_page.dart';
 
 void main() {
   test('uses physical pixels for fullscreen shader filter rendering', () {
@@ -112,6 +113,46 @@ void main() {
 
     expect(service.postProcessEffect, ScreenPostProcessEffect.none);
     expect(engine.lastPostProcessEffect, ScreenPostProcessEffect.none);
+  });
+
+  testWidgets('sandbox entry replaces an active mosaic postprocess filter', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+    });
+
+    final engine = _FakeDX11ShaderEngine();
+    final service = ShaderFilterService(engine: engine);
+
+    service.init();
+    service.updateScreenSize(const Size(100, 80));
+    service.applyFilter(
+      FilterApplyMode.dynamic,
+      const Size(100, 80),
+      Colors.white,
+      postProcessEffect: ScreenPostProcessEffect.mosaic,
+    );
+    service.pauseOwnTimer();
+
+    expect(service.mode, FilterApplyMode.dynamic);
+    expect(service.postProcessEffect, ScreenPostProcessEffect.mosaic);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ShaderSandboxPage(service: service),
+        ),
+      ),
+    );
+
+    expect(service.mode, FilterApplyMode.dynamic);
+    expect(service.postProcessEffect, ScreenPostProcessEffect.none);
+    expect(engine.lastPostProcessEffect, ScreenPostProcessEffect.none);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    service.stopFilter();
   });
 
   test('throttles dynamic fullscreen fallback rendering', () {

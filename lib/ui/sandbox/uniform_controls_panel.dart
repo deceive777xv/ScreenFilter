@@ -107,13 +107,17 @@ class UniformControlsPanel extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            const Text(
-              'u_AccentColor',
-              style: TextStyle(
-                fontFamily: 'Consolas',
-                fontSize: 12,
-                color: Color(0xFFF38BA8),
-                fontWeight: FontWeight.w600,
+            const Flexible(
+              child: Text(
+                'u_AccentColor',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Consolas',
+                  fontSize: 12,
+                  color: Color(0xFFF38BA8),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             const SizedBox(width: 6),
@@ -263,13 +267,17 @@ class _UniformRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        Text(
-          name,
-          style: TextStyle(
-            fontFamily: 'Consolas',
-            fontSize: 12,
-            color: color,
-            fontWeight: FontWeight.w600,
+        Flexible(
+          child: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Consolas',
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
         const SizedBox(width: 6),
@@ -281,13 +289,18 @@ class _UniformRow extends StatelessWidget {
             color: Colors.white.withValues(alpha: 0.3),
           ),
         ),
-        const Spacer(),
-        Text(
-          value,
-          style: const TextStyle(
-            fontFamily: 'Consolas',
-            fontSize: 12,
-            color: Color(0xFF9399B2),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              fontFamily: 'Consolas',
+              fontSize: 12,
+              color: Color(0xFF9399B2),
+            ),
           ),
         ),
       ],

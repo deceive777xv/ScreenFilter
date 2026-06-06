@@ -91,10 +91,23 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
 
   void _compileCurrentShader() {
     final result = _service.compileShader(_currentCode);
+    if (result.success && _filterMode != FilterApplyMode.none) {
+      _reapplyActiveFilterWithCompiledShader();
+    }
     setState(() {
       _compileSuccess = result.success;
       _compileError = result.success ? null : result.errorMessage;
     });
+  }
+
+  void _reapplyActiveFilterWithCompiledShader() {
+    final screenSize = _service.screenSize;
+    if (screenSize == Size.zero) return;
+
+    _service.applyFilter(_filterMode, screenSize, _accentColor);
+    if (_filterMode == FilterApplyMode.dynamic) {
+      _service.pauseOwnTimer();
+    }
   }
 
   // ── Rendering ──────────────────────────────────────────────────
