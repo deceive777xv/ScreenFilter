@@ -33,6 +33,19 @@ void main() {
     expect(service.filterBrightness, 1.0);
   });
 
+  test('keeps the last successful fullscreen shader code for restore', () {
+    final engine = _FakeDX11ShaderEngine();
+    final service = ShaderFilterService(engine: engine);
+    const code = 'float4 main() : SV_TARGET { return 1; }';
+
+    service.init();
+    final result = service.compileShader(code);
+
+    expect(result.success, isTrue);
+    expect(service.fullscreenShaderCode, code);
+    expect(engine.compileShaderCalls, 1);
+  });
+
   test('redraws native overlay when fullscreen visuals change', () {
     final engine = _FakeDX11ShaderEngine();
     final service = ShaderFilterService(engine: engine);

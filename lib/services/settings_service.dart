@@ -4,12 +4,67 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/overlay_component.dart';
 import '../models/advanced_config.dart';
 
+class PersistedNativeFilterState {
+  const PersistedNativeFilterState({
+    required this.mode,
+    required this.origin,
+    required this.accentColor,
+    required this.baseColor,
+    required this.alpha,
+    required this.brightness,
+    required this.postProcessEffectIndex,
+    required this.postProcessIntensity,
+    this.shaderCode,
+  });
+
+  final String mode;
+  final String origin;
+  final Color accentColor;
+  final Color baseColor;
+  final double alpha;
+  final double brightness;
+  final int postProcessEffectIndex;
+  final double postProcessIntensity;
+  final String? shaderCode;
+
+  Map<String, dynamic> toJson() => {
+    'mode': mode,
+    'origin': origin,
+    'accentColor': accentColor.toARGB32(),
+    'baseColor': baseColor.toARGB32(),
+    'alpha': alpha,
+    'brightness': brightness,
+    'postProcessEffectIndex': postProcessEffectIndex,
+    'postProcessIntensity': postProcessIntensity,
+    if (shaderCode != null) 'shaderCode': shaderCode,
+  };
+
+  factory PersistedNativeFilterState.fromJson(Map<String, dynamic> json) {
+    return PersistedNativeFilterState(
+      mode: json['mode'] as String? ?? '',
+      origin: json['origin'] as String? ?? '',
+      accentColor: Color(json['accentColor'] as int? ?? 0xFFFF8040),
+      baseColor: Color(
+        json['baseColor'] as int? ?? Colors.transparent.toARGB32(),
+      ),
+      alpha: (json['alpha'] as num?)?.toDouble() ?? 1.0,
+      brightness: (json['brightness'] as num?)?.toDouble() ?? 0.0,
+      postProcessEffectIndex:
+          (json['postProcessEffectIndex'] as num?)?.toInt() ?? 0,
+      postProcessIntensity:
+          (json['postProcessIntensity'] as num?)?.toDouble() ?? 24.0,
+      shaderCode: json['shaderCode'] as String?,
+    );
+  }
+}
+
 /// 应用设置持久化服务
 class SettingsService {
   static const _keyBrightness = 'filter_brightness';
   static const _keyAlpha = 'filter_alpha';
   static const _keyBaseColorValue = 'filter_base_color';
   static const _keyActivePreset = 'filter_active_preset';
+  static const _keyLastNativeFilter = 'filter_last_native_overlay';
   static const _keyRecentColors = 'filter_recent_colors';
   static const _keyOverlayClock = 'overlay_clock';
   static const _keyOverlaySlogan = 'overlay_slogan';
@@ -43,6 +98,18 @@ class SettingsService {
 
   String? getActivePreset() => _prefs.getString(_keyActivePreset);
 
+  PersistedNativeFilterState? getLastNativeFilterState() {
+    final decoded = _decodeMap(_prefs.getString(_keyLastNativeFilter));
+    if (decoded == null) return null;
+    try {
+      final state = PersistedNativeFilterState.fromJson(decoded);
+      if (state.mode.isEmpty || state.origin.isEmpty) return null;
+      return state;
+    } catch (_) {
+      return null;
+    }
+  }
+
   List<Color> getRecentColors() {
     final list = _prefs.getStringList(_keyRecentColors);
     if (list == null || list.isEmpty) {
@@ -68,6 +135,12 @@ class SettingsService {
     if (name == null) return _prefs.remove(_keyActivePreset);
     return _prefs.setString(_keyActivePreset, name);
   }
+
+  Future<void> setLastNativeFilterState(PersistedNativeFilterState state) =>
+      _prefs.setString(_keyLastNativeFilter, jsonEncode(state.toJson()));
+
+  Future<void> clearLastNativeFilterState() =>
+      _prefs.remove(_keyLastNativeFilter);
 
   Future<void> setRecentColors(List<Color> colors) => _prefs.setStringList(
     _keyRecentColors,

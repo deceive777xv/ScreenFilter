@@ -37,6 +37,7 @@ test/*
 !test/console_hotkey_service_test.dart
 !test/console_panel_screen_effect_test.dart
 !test/filter_preset_test.dart
+!test/settings_service_test.dart
 img_temp/
 script.ps1
 

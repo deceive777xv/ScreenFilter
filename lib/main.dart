@@ -16,6 +16,7 @@ import 'models/overlay_component.dart';
 import 'models/advanced_config.dart';
 import 'models/filter_preset.dart';
 import 'models/screen_post_process_effect.dart';
+import 'models/shader_preset.dart';
 import 'services/automation_preset_controller.dart';
 import 'services/console_hotkey_service.dart';
 import 'services/debounced_action.dart';
@@ -196,6 +197,9 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     );
     _shaderFilterService.init();
     _shaderFilterService.modeNotifier.addListener(_onSandboxModeChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _restoreLastNativeFilterOnStartup();
+    });
 
     initSystemTray();
     _loadShader();
@@ -215,6 +219,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
         brightness: _brightness,
       );
     }
+    unawaited(_persistNativeFilterRuntimeState());
     setState(() {});
     _scheduleTrayMenuRefresh();
   }
@@ -223,6 +228,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   void dispose() {
     _basicFilterPersistDebouncer.flush();
     _settingsPersistDebouncer.flush();
+    unawaited(_persistNativeFilterRuntimeState());
     _trayMenuRefreshDebouncer.dispose();
     _automationPollingRelease?.call();
     unawaited(_consoleHotkeyService.dispose());
@@ -354,7 +360,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     }).toList();
   }
 
-  void _handleTrayAction(TrayMenuAction? action) {
+  Future<void> _handleTrayAction(TrayMenuAction? action) async {
     switch (action) {
       case TrayMenuAction.togglePanel:
         _togglePanel();
@@ -378,8 +384,8 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
         _clearTrayFilter(rememberCurrent: true);
         break;
       case TrayMenuAction.exit:
-        _exitFromTray();
-        break;
+        await _exitFromTray();
+        return;
       case TrayMenuAction.presets:
       case null:
         break;
@@ -497,7 +503,120 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       postProcessEffect: snapshot.postProcessEffect,
       postProcessIntensity: snapshot.postProcessIntensity,
     );
+    unawaited(_persistNativeFilterRuntimeState());
     return true;
+  }
+
+  Future<void> _restoreLastNativeFilterOnStartup() async {
+    if (!mounted || _shaderFilterService.mode != FilterApplyMode.none) return;
+    final snapshot = _settings.getLastNativeFilterState();
+    if (snapshot == null) return;
+
+    final mode = _filterModeFromName(snapshot.mode);
+    final origin = _filterOriginFromName(snapshot.origin);
+    final postProcessEffect = _postProcessEffectFromIndex(
+      snapshot.postProcessEffectIndex,
+    );
+    if (mode == null ||
+        mode == FilterApplyMode.none ||
+        origin == null ||
+        origin == FilterApplyOrigin.none) {
+      await _settings.clearLastNativeFilterState();
+      return;
+    }
+
+    final shaderCode = snapshot.shaderCode;
+    if (postProcessEffect == ScreenPostProcessEffect.none) {
+      final codeToCompile = shaderCode?.isNotEmpty == true
+          ? shaderCode!
+          : origin == FilterApplyOrigin.sandbox
+          ? ShaderPreset.defaultShaderCode
+          : null;
+      if (codeToCompile == null) {
+        await _settings.clearLastNativeFilterState();
+        return;
+      }
+      final result = _shaderFilterService.compileShader(codeToCompile);
+      if (!result.success) return;
+    }
+
+    final media = MediaQuery.of(context);
+    setState(() {
+      _baseColor = snapshot.baseColor;
+      _alpha = snapshot.alpha;
+      _brightness = snapshot.brightness;
+    });
+    _shaderFilterService.updateScreenSize(media.size);
+    _shaderFilterService.updateDevicePixelRatio(media.devicePixelRatio);
+    _shaderFilterService.updateAccentColor(snapshot.accentColor);
+    _shaderFilterService.updateFilterVisuals(
+      opacity: _alpha,
+      brightness: _brightness,
+    );
+    _shaderFilterService.applyFilter(
+      mode,
+      media.size,
+      snapshot.accentColor,
+      postProcessEffect: postProcessEffect,
+      postProcessIntensity: snapshot.postProcessIntensity,
+      origin: origin,
+    );
+    _persistBasicFilterNow(activePreset: null, includeActivePreset: true);
+    await _persistNativeFilterRuntimeState();
+  }
+
+  Future<void> _persistNativeFilterRuntimeState() {
+    final mode = _shaderFilterService.mode;
+    final origin = _shaderFilterService.filterOrigin;
+    if (mode == FilterApplyMode.none ||
+        (origin != FilterApplyOrigin.sandbox &&
+            origin != FilterApplyOrigin.screenEffect)) {
+      return _settings.clearLastNativeFilterState();
+    }
+
+    final postProcessEffect = _shaderFilterService.postProcessEffect;
+    final shaderCode = postProcessEffect == ScreenPostProcessEffect.none
+        ? _shaderFilterService.fullscreenShaderCode
+        : null;
+    if (postProcessEffect == ScreenPostProcessEffect.none &&
+        (shaderCode == null || shaderCode.isEmpty)) {
+      return _settings.clearLastNativeFilterState();
+    }
+
+    return _settings.setLastNativeFilterState(
+      PersistedNativeFilterState(
+        mode: mode.name,
+        origin: origin.name,
+        accentColor: _shaderFilterService.accentColor,
+        baseColor: _baseColor,
+        alpha: _alpha,
+        brightness: _brightness,
+        postProcessEffectIndex: postProcessEffect.index,
+        postProcessIntensity: _shaderFilterService.postProcessIntensity,
+        shaderCode: shaderCode,
+      ),
+    );
+  }
+
+  FilterApplyMode? _filterModeFromName(String name) {
+    for (final mode in FilterApplyMode.values) {
+      if (mode.name == name) return mode;
+    }
+    return null;
+  }
+
+  FilterApplyOrigin? _filterOriginFromName(String name) {
+    for (final origin in FilterApplyOrigin.values) {
+      if (origin.name == name) return origin;
+    }
+    return null;
+  }
+
+  ScreenPostProcessEffect _postProcessEffectFromIndex(int index) {
+    if (index < 0 || index >= ScreenPostProcessEffect.values.length) {
+      return ScreenPostProcessEffect.none;
+    }
+    return ScreenPostProcessEffect.values[index];
   }
 
   void _applyBasicFilterValues({
@@ -523,11 +642,13 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       opacity: _alpha,
       brightness: _brightness,
     );
+    unawaited(_persistNativeFilterRuntimeState());
   }
 
-  void _exitFromTray() {
+  Future<void> _exitFromTray() async {
     _basicFilterPersistDebouncer.flush();
     _settingsPersistDebouncer.flush();
+    await _persistNativeFilterRuntimeState();
     unawaited(_consoleHotkeyService.dispose());
     _shaderFilterService.dispose();
     _systemTray.destroy();

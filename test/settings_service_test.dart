@@ -74,6 +74,38 @@ void main() {
     expect(colors.length, 5);
   });
 
+  test('persists and clears last native filter state', () async {
+    SharedPreferences.setMockInitialValues({});
+    final settings = await SettingsService.init();
+
+    await settings.setLastNativeFilterState(
+      const PersistedNativeFilterState(
+        mode: 'dynamic',
+        origin: 'sandbox',
+        accentColor: Color(0xFFFF8040),
+        baseColor: Colors.transparent,
+        alpha: 0.5,
+        brightness: 0.25,
+        postProcessEffectIndex: 0,
+        postProcessIntensity: 24.0,
+        shaderCode: 'float4 main() : SV_TARGET { return 1; }',
+      ),
+    );
+
+    final restored = settings.getLastNativeFilterState();
+
+    expect(restored, isNotNull);
+    expect(restored!.mode, 'dynamic');
+    expect(restored.origin, 'sandbox');
+    expect(restored.alpha, 0.5);
+    expect(restored.brightness, 0.25);
+    expect(restored.shaderCode, contains('float4 main'));
+
+    await settings.clearLastNativeFilterState();
+
+    expect(settings.getLastNativeFilterState(), isNull);
+  });
+
   test('falls back when persisted advanced JSON is corrupted', () async {
     SharedPreferences.setMockInitialValues({
       'overlay_clock': '{bad-json',

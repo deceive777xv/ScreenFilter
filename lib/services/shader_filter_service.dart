@@ -45,6 +45,7 @@ class ShaderFilterService {
   final Duration fallbackFrameInterval;
   bool _engineReady = false;
   bool _shaderCompiled = false;
+  String? _fullscreenShaderCode;
   bool _nativeOverlayActive = false;
   double? _lastFullscreenTime;
   double? _lastFullscreenMouseX;
@@ -75,6 +76,7 @@ class ShaderFilterService {
   // ── Getters ──────────────────────────────────────────────────
   bool get isEngineReady => _engineReady;
   bool get isShaderCompiled => _shaderCompiled;
+  String? get fullscreenShaderCode => _fullscreenShaderCode;
   FilterApplyMode get mode => _mode;
   FilterApplyOrigin get filterOrigin => _filterOrigin;
   bool get isSandboxFilterActive =>
@@ -151,6 +153,9 @@ class ShaderFilterService {
     }
     final result = _engine.compileShader(code);
     _shaderCompiled = result.success;
+    if (result.success) {
+      _fullscreenShaderCode = code;
+    }
     return result;
   }
 
