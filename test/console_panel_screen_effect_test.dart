@@ -218,11 +218,11 @@ void main() {
 
     expect(service.mode, FilterApplyMode.dynamic);
     expect(service.postProcessEffect, ScreenPostProcessEffect.mosaic);
-    expect(lastBrightness, -0.5);
+    expect(lastBrightness, -0.55);
     expect(lastAlpha, 0.85);
-    expect(service.filterBrightness, -0.5);
+    expect(service.filterBrightness, -0.55);
     expect(service.filterOpacity, 0.85);
-    expect(engine.lastBrightness, -0.5);
+    expect(engine.lastBrightness, -0.55);
     expect(engine.lastOpacity, 0.85);
 
     service.stopFilter();
@@ -248,7 +248,7 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: ConsolePanel(
-            brightness: -0.5,
+            brightness: -0.55,
             alpha: 0.85,
             baseColor: Colors.transparent,
             settingsService: settings,
