@@ -243,9 +243,17 @@ class _ConsolePanelState extends State<ConsolePanel> {
 
   void _stopScreenEffect() {
     widget.shaderFilterService?.stopFilter();
+    final clearPreset = basicFilterPresetByName('清除');
+    if (clearPreset != null) {
+      widget.onBaseColorChanged(clearPreset.baseColor);
+      widget.onAlphaChanged(clearPreset.alpha);
+      widget.onBrightnessChanged(clearPreset.brightness);
+      widget.settingsService.setActivePreset(clearPreset.name);
+    }
     setState(() {
       _activeEffectName = null;
       _sandboxActive = false;
+      _activePresetName = clearPreset?.name;
     });
   }
 

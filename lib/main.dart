@@ -20,6 +20,7 @@ import 'services/automation_preset_controller.dart';
 import 'services/console_hotkey_service.dart';
 import 'services/debounced_action.dart';
 import 'services/filter_overlay_logic.dart';
+import 'services/fullscreen_window_refresh.dart';
 import 'services/keyed_debounced_action.dart';
 import 'services/settings_service.dart';
 import 'services/shader_filter_service.dart';
@@ -45,6 +46,7 @@ void main() async {
   windowManager.waitUntilReadyToShow(windowOptions, () async {
     await windowManager.show();
     await windowManager.setFullScreen(true);
+    await refreshFullscreenWindowMetrics();
     await windowManager.setIgnoreMouseEvents(true);
   });
 
@@ -279,6 +281,8 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       setState(() => _isPanelOpen = false);
       await windowManager.setIgnoreMouseEvents(true);
     } else {
+      await refreshFullscreenWindowMetrics();
+      if (!mounted) return;
       setState(() => _isPanelOpen = true);
       await windowManager.setIgnoreMouseEvents(false);
     }

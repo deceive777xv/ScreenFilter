@@ -77,6 +77,89 @@ void main() {
       service.stopFilter();
     },
   );
+
+  testWidgets(
+    'cancelling a console screen effect clears the basic filter controls',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1400, 900));
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+      });
+
+      SharedPreferences.setMockInitialValues({});
+      final settings = await SettingsService.init();
+      final engine = _FakeDX11ShaderEngine();
+      final service = ShaderFilterService(engine: engine);
+      Color? lastBaseColor;
+      double? lastAlpha;
+      double? lastBrightness;
+
+      service.init();
+      service.updateScreenSize(const Size(720, 560));
+      service.applyFilter(
+        FilterApplyMode.dynamic,
+        const Size(720, 560),
+        Colors.white,
+        postProcessEffect: ScreenPostProcessEffect.mosaic,
+        origin: FilterApplyOrigin.screenEffect,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ConsolePanel(
+              brightness: -0.12,
+              alpha: 0.24,
+              baseColor: Colors.black,
+              settingsService: settings,
+              clockComponent: OverlayComponent.createClock(),
+              sloganComponent: OverlayComponent.createSlogan(),
+              watermarkComponent: OverlayComponent.createWatermark(),
+              onOverlayChanged: (_) {},
+              shaderFilterService: service,
+              focusModeConfig: FocusModeConfig(),
+              spotlightConfig: SpotlightConfig(),
+              automationRules: const [],
+              automationEnabled: false,
+              consoleHotkeyConfig: const ConsoleHotkeyConfig(),
+              onFocusModeChanged: (_) {},
+              onSpotlightChanged: (_) {},
+              onConsoleHotkeyChanged: (_) {},
+              regionMaskConfig: RegionMaskConfig(),
+              onRegionMaskChanged: (_) {},
+              onStartDrawingRegion: () {},
+              onAutomationRulesChanged: (_) {},
+              onAutomationEnabledChanged: (_) {},
+              onBrightnessChanged: (value) => lastBrightness = value,
+              onAlphaChanged: (value) => lastAlpha = value,
+              onBaseColorChanged: (value) => lastBaseColor = value,
+              onClose: () {},
+              enableSystemProbes: false,
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byTooltip('滤镜'));
+      await tester.pump();
+      expect(find.text('基础调节'), findsOneWidget);
+      final mosaicTile = find.byIcon(Icons.grid_view_rounded);
+      for (var i = 0; i < 3; i++) {
+        await tester.drag(find.byType(ListView).last, const Offset(0, -350));
+        await tester.pump();
+      }
+      await tester.tap(mosaicTile);
+      await tester.pump();
+
+      expect(service.mode, FilterApplyMode.none);
+      expect(service.postProcessEffect, ScreenPostProcessEffect.none);
+      expect(engine.lastPostProcessEffect, ScreenPostProcessEffect.none);
+      expect(lastBaseColor, Colors.transparent);
+      expect(lastAlpha, 0.0);
+      expect(lastBrightness, 0.0);
+      expect(settings.getActivePreset(), '清除');
+    },
+  );
 }
 
 class _FakeDX11ShaderEngine implements DX11ShaderEngine {

@@ -36,6 +36,7 @@ test/*
 !test/advanced_page_test.dart
 !test/console_hotkey_service_test.dart
 !test/console_panel_screen_effect_test.dart
+!test/fullscreen_window_refresh_test.dart
 !test/filter_preset_test.dart
 img_temp/
 script.ps1
