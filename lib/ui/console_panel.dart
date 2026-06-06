@@ -119,8 +119,8 @@ class _ConsolePanelState extends State<ConsolePanel> {
   static const String _mosaicEffectName = '马赛克';
   static const double _mosaicEffectBrightness = -0.55;
   static const double _mosaicEffectAlpha = 0.85;
-  static const double _screenEffectBrightness = 0.0;
-  static const double _screenEffectAlpha = 1.0;
+  static const double _screenEffectBrightness = 0.5;
+  static const double _screenEffectAlpha = 0.5;
 
   late List<Color> _recentColors;
 
