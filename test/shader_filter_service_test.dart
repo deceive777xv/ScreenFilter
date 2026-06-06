@@ -116,7 +116,7 @@ void main() {
   });
 
   testWidgets(
-    'sandbox entry stops an active screen effect without enabling a sandbox filter',
+    'sandbox entry keeps an active screen effect without enabling a sandbox filter',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1400, 900));
       addTearDown(() async {
@@ -133,11 +133,13 @@ void main() {
         const Size(100, 80),
         Colors.white,
         postProcessEffect: ScreenPostProcessEffect.mosaic,
+        origin: FilterApplyOrigin.screenEffect,
       );
-      service.pauseOwnTimer();
 
       expect(service.mode, FilterApplyMode.dynamic);
+      expect(service.filterOrigin, FilterApplyOrigin.screenEffect);
       expect(service.postProcessEffect, ScreenPostProcessEffect.mosaic);
+      expect(engine.compileShaderCalls, 0);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -145,12 +147,15 @@ void main() {
         ),
       );
 
-      expect(service.mode, FilterApplyMode.none);
-      expect(service.postProcessEffect, ScreenPostProcessEffect.none);
-      expect(engine.lastPostProcessEffect, ScreenPostProcessEffect.none);
+      expect(service.mode, FilterApplyMode.dynamic);
+      expect(service.filterOrigin, FilterApplyOrigin.screenEffect);
+      expect(service.postProcessEffect, ScreenPostProcessEffect.mosaic);
+      expect(engine.lastPostProcessEffect, ScreenPostProcessEffect.mosaic);
+      expect(engine.compileShaderCalls, 0);
       expect(find.text('应用滤镜'), findsOneWidget);
       expect(find.text('动态模式'), findsNothing);
 
+      service.stopFilter();
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
@@ -304,6 +309,7 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
   int renderOverlayFrameCalls = 0;
   int renderFrameCalls = 0;
   int setUniformCalls = 0;
+  int compileShaderCalls = 0;
   bool overlayActive = false;
   bool overlayCanStart = true;
   Uint8List? nextFramePixels;
@@ -324,6 +330,7 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
 
   @override
   ShaderCompileResult compileShader(String hlslCode) {
+    compileShaderCalls++;
     return const ShaderCompileResult(success: true);
   }
 

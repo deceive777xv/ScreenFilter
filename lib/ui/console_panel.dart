@@ -252,14 +252,13 @@ class _ConsolePanelState extends State<ConsolePanel> {
   void _selectMenu(int index) {
     final enteringSandbox = _menus[index] == '沙盒';
     final svc = widget.shaderFilterService;
-    if (enteringSandbox && (svc?.isScreenEffectActive ?? false)) {
-      svc!.stopFilter();
-    }
     setState(() {
       _selectedIndex = index;
       if (enteringSandbox) {
-        _activeEffectName = null;
         _sandboxActive = svc?.isSandboxFilterActive ?? false;
+        if (_sandboxActive) {
+          _activeEffectName = null;
+        }
       }
     });
   }

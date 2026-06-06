@@ -13,7 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets(
-    'opening the sandbox from the console clears active screen effect state',
+    'opening the sandbox from the console preserves active screen effect state',
     (tester) async {
       SharedPreferences.setMockInitialValues({});
       final settings = await SettingsService.init();
@@ -27,8 +27,8 @@ void main() {
         const Size(720, 560),
         Colors.white,
         postProcessEffect: ScreenPostProcessEffect.mosaic,
+        origin: FilterApplyOrigin.screenEffect,
       );
-      service.pauseOwnTimer();
 
       await tester.pumpWidget(
         MaterialApp(
@@ -68,15 +68,20 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.code_outlined));
 
-      expect(service.mode, FilterApplyMode.none);
-      expect(service.postProcessEffect, ScreenPostProcessEffect.none);
-      expect(engine.lastPostProcessEffect, ScreenPostProcessEffect.none);
+      expect(service.mode, FilterApplyMode.dynamic);
+      expect(service.filterOrigin, FilterApplyOrigin.screenEffect);
+      expect(service.postProcessEffect, ScreenPostProcessEffect.mosaic);
+      expect(engine.lastPostProcessEffect, ScreenPostProcessEffect.mosaic);
+      expect(engine.compileShaderCalls, 0);
+
+      service.stopFilter();
     },
   );
 }
 
 class _FakeDX11ShaderEngine implements DX11ShaderEngine {
   bool overlayActive = false;
+  int compileShaderCalls = 0;
   ScreenPostProcessEffect? lastPostProcessEffect;
   double? lastPostProcessIntensity;
 
@@ -88,6 +93,7 @@ class _FakeDX11ShaderEngine implements DX11ShaderEngine {
 
   @override
   ShaderCompileResult compileShader(String hlslCode) {
+    compileShaderCalls++;
     return const ShaderCompileResult(success: true);
   }
 

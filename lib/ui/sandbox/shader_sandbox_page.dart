@@ -53,18 +53,19 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
   void initState() {
     super.initState();
     _currentCode = ShaderPreset.defaultShaderCode;
-    if (_service.isScreenEffectActive) {
-      _service.stopFilter();
-    }
+    final screenEffectActive = _service.isScreenEffectActive;
     _filterMode = _service.isSandboxFilterActive
         ? _service.mode
         : FilterApplyMode.none;
     _accentColor = _service.accentColor;
 
-    // We take over rendering while the page is alive.
-    _service.pauseOwnTimer();
+    if (_filterMode != FilterApplyMode.none) {
+      _service.pauseOwnTimer();
+    }
 
-    _compileCurrentShader();
+    if (!screenEffectActive) {
+      _compileCurrentShader();
+    }
     _startAnimation();
   }
 
