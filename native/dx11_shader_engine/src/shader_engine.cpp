@@ -13,10 +13,6 @@
 #include <vector>
 #include <mutex>
 
-#ifndef WDA_EXCLUDEFROMCAPTURE
-#define WDA_EXCLUDEFROMCAPTURE 0x00000011
-#endif
-
 // ── Internal state ──────────────────────────────────────────────────────────
 static ID3D11Device*           g_device       = nullptr;
 static ID3D11DeviceContext*    g_context      = nullptr;
@@ -449,33 +445,12 @@ static void ReleaseOverlayResources() {
     g_lastOverlayPositionTick = 0;
 }
 
-static void EnsureOverlayClickThrough() {
-    if (!g_overlayWindow) return;
-
-    LONG_PTR exStyle = GetWindowLongPtrW(g_overlayWindow, GWL_EXSTYLE);
-    const LONG_PTR requiredStyles =
-        WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE |
-        WS_EX_NOREDIRECTIONBITMAP;
-    if ((exStyle & requiredStyles) != requiredStyles) {
-        exStyle |= requiredStyles;
-        exStyle &= ~WS_EX_APPWINDOW;
-        SetWindowLongPtrW(g_overlayWindow, GWL_EXSTYLE, exStyle);
-        SetWindowPos(
-            g_overlayWindow, nullptr, 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
-                SWP_NOACTIVATE | SWP_FRAMECHANGED
-        );
-    }
-}
-
 static LRESULT CALLBACK OverlayWndProc(
     HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam
 ) {
     switch (message) {
         case WM_NCHITTEST:
             return HTTRANSPARENT;
-        case WM_MOUSEACTIVATE:
-            return MA_NOACTIVATE;
         case WM_CLOSE:
             ShowWindow(hwnd, SW_HIDE);
             return 0;
@@ -553,7 +528,6 @@ static void PositionOverlayWindow(
     bool force = false
 ) {
     if (!g_overlayWindow) return;
-    EnsureOverlayClickThrough();
 
     const ULONGLONG now = GetTickCount64();
     if (!force &&
@@ -610,7 +584,7 @@ static bool CreateOverlayWindow(int32_t width, int32_t height) {
     if (!RegisterOverlayWindowClass()) return false;
 
     g_overlayWindow = CreateWindowExW(
-        WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE |
+        WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE |
             WS_EX_NOREDIRECTIONBITMAP,
         kOverlayWindowClassName,
         L"ScreenFilter DX11 Overlay",
@@ -626,10 +600,8 @@ static bool CreateOverlayWindow(int32_t width, int32_t height) {
     );
     if (!g_overlayWindow) return false;
 
-    EnsureOverlayClickThrough();
+    SetLayeredWindowAttributes(g_overlayWindow, 0, 255, LWA_ALPHA);
     ShowWindow(g_overlayWindow, SW_SHOWNOACTIVATE);
-    SetWindowDisplayAffinity(g_overlayWindow, WDA_EXCLUDEFROMCAPTURE);
-    EnsureOverlayClickThrough();
     PositionOverlayWindow(width, height, true);
     return true;
 }
