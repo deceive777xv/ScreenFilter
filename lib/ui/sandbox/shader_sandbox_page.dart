@@ -12,8 +12,16 @@ import 'uniform_controls_panel.dart';
 /// compiling, and previewing HLSL shaders in real time.
 class ShaderSandboxPage extends StatefulWidget {
   final ShaderFilterService service;
+  final void Function({required double brightness, required double alpha})?
+  onFilterVisualDefaultsChanged;
+  final VoidCallback? onFilterCleared;
 
-  const ShaderSandboxPage({super.key, required this.service});
+  const ShaderSandboxPage({
+    super.key,
+    required this.service,
+    this.onFilterVisualDefaultsChanged,
+    this.onFilterCleared,
+  });
 
   @override
   State<ShaderSandboxPage> createState() => _ShaderSandboxPageState();
@@ -259,11 +267,16 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
 
     if (mode == FilterApplyMode.none) {
       _service.stopFilter();
+      widget.onFilterCleared?.call();
       return;
     }
 
     if (!_compileCurrentShaderForFullscreen()) return;
 
+    widget.onFilterVisualDefaultsChanged?.call(
+      brightness: _sandboxFilterBrightness,
+      alpha: _sandboxFilterOpacity,
+    );
     _service.updateFilterVisuals(
       opacity: _sandboxFilterOpacity,
       brightness: _sandboxFilterBrightness,

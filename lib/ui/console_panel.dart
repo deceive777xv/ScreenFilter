@@ -119,8 +119,8 @@ class _ConsolePanelState extends State<ConsolePanel> {
   static const String _mosaicEffectName = '马赛克';
   static const double _mosaicEffectBrightness = -0.55;
   static const double _mosaicEffectAlpha = 0.85;
-  static const double _screenEffectBrightness = 0.5;
-  static const double _screenEffectAlpha = 0.5;
+  static const double _screenEffectBrightness = 0.0;
+  static const double _screenEffectAlpha = 1.0;
 
   late List<Color> _recentColors;
 
@@ -265,19 +265,38 @@ class _ConsolePanelState extends State<ConsolePanel> {
     svc.updateFilterVisuals(opacity: alpha, brightness: brightness);
   }
 
+  void _applySandboxFilterVisualDefaults({
+    required double brightness,
+    required double alpha,
+  }) {
+    final svc = widget.shaderFilterService;
+    _clearActivePreset();
+    widget.onBrightnessChanged(brightness);
+    widget.onAlphaChanged(alpha);
+    svc?.updateFilterVisuals(opacity: alpha, brightness: brightness);
+  }
+
+  void _applyClearFilterPreset() {
+    final clearPreset = basicFilterPresetByName('清除');
+    if (clearPreset == null) return;
+    widget.onBaseColorChanged(clearPreset.baseColor);
+    widget.onAlphaChanged(clearPreset.alpha);
+    widget.onBrightnessChanged(clearPreset.brightness);
+    widget.settingsService.setActivePreset(clearPreset.name);
+    setState(() => _activePresetName = clearPreset.name);
+  }
+
+  void _handleSandboxFilterCleared() {
+    _applyClearFilterPreset();
+    setState(() => _sandboxActive = false);
+  }
+
   void _stopScreenEffect() {
     widget.shaderFilterService?.stopFilter();
-    final clearPreset = basicFilterPresetByName('清除');
-    if (clearPreset != null) {
-      widget.onBaseColorChanged(clearPreset.baseColor);
-      widget.onAlphaChanged(clearPreset.alpha);
-      widget.onBrightnessChanged(clearPreset.brightness);
-      widget.settingsService.setActivePreset(clearPreset.name);
-    }
+    _applyClearFilterPreset();
     setState(() {
       _activeEffectName = null;
       _sandboxActive = false;
-      _activePresetName = clearPreset?.name;
     });
   }
 
@@ -598,7 +617,12 @@ class _ConsolePanelState extends State<ConsolePanel> {
         );
       case 3:
         return widget.shaderFilterService != null
-            ? ShaderSandboxPage(service: widget.shaderFilterService!)
+            ? ShaderSandboxPage(
+                service: widget.shaderFilterService!,
+                onFilterVisualDefaultsChanged:
+                    _applySandboxFilterVisualDefaults,
+                onFilterCleared: _handleSandboxFilterCleared,
+              )
             : const Center(
                 child: Text(
                   '滤镜服务未就绪',

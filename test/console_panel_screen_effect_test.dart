@@ -296,6 +296,95 @@ void main() {
     service.stopFilter();
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets('sandbox filter updates console visuals and clears on cancel', (
+    tester,
+  ) async {
+    final previousOnError = FlutterError.onError;
+    FlutterError.onError = (details) {
+      if (details.exceptionAsString().contains('A RenderFlex overflowed')) {
+        return;
+      }
+      previousOnError?.call(details);
+    };
+    addTearDown(() {
+      FlutterError.onError = previousOnError;
+    });
+
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+    });
+
+    SharedPreferences.setMockInitialValues({});
+    final settings = await SettingsService.init();
+    final engine = _FakeDX11ShaderEngine();
+    final service = ShaderFilterService(engine: engine)..init();
+    Color? lastBaseColor;
+    double? lastAlpha;
+    double? lastBrightness;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ConsolePanel(
+            brightness: 0,
+            alpha: 1,
+            baseColor: Colors.transparent,
+            settingsService: settings,
+            clockComponent: OverlayComponent.createClock(),
+            sloganComponent: OverlayComponent.createSlogan(),
+            watermarkComponent: OverlayComponent.createWatermark(),
+            onOverlayChanged: (_) {},
+            shaderFilterService: service,
+            focusModeConfig: FocusModeConfig(),
+            spotlightConfig: SpotlightConfig(),
+            automationRules: const [],
+            automationEnabled: false,
+            consoleHotkeyConfig: const ConsoleHotkeyConfig(),
+            onFocusModeChanged: (_) {},
+            onSpotlightChanged: (_) {},
+            onConsoleHotkeyChanged: (_) {},
+            regionMaskConfig: RegionMaskConfig(),
+            onRegionMaskChanged: (_) {},
+            onStartDrawingRegion: () {},
+            onAutomationRulesChanged: (_) {},
+            onAutomationEnabledChanged: (_) {},
+            onBrightnessChanged: (value) => lastBrightness = value,
+            onAlphaChanged: (value) => lastAlpha = value,
+            onBaseColorChanged: (value) => lastBaseColor = value,
+            onClose: () {},
+            enableSystemProbes: false,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('沙盒'));
+    await tester.pump();
+    expect(find.text('编译成功'), findsOneWidget);
+
+    await tester.tap(find.text('动态'));
+    await tester.pump();
+
+    expect(service.mode, FilterApplyMode.dynamic);
+    expect(service.filterOrigin, FilterApplyOrigin.sandbox);
+    expect(lastBrightness, 0.5);
+    expect(lastAlpha, 0.5);
+    expect(service.filterBrightness, 0.5);
+    expect(service.filterOpacity, 0.5);
+
+    await tester.tap(find.text('取消滤镜 (动态)'));
+    await tester.pump();
+
+    expect(service.mode, FilterApplyMode.none);
+    expect(lastBaseColor, Colors.transparent);
+    expect(lastBrightness, 0.0);
+    expect(lastAlpha, 0.0);
+    expect(settings.getActivePreset(), '清除');
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }
 
 Future<void> _openFilterPageAndRevealScreenEffects(WidgetTester tester) async {
