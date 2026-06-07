@@ -370,6 +370,84 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('external screen effect restore updates console tile highlight', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+    });
+
+    SharedPreferences.setMockInitialValues({});
+    final settings = await SettingsService.init();
+    final engine = _FakeDX11ShaderEngine();
+    final service = ShaderFilterService(engine: engine)..init();
+    final effect = kScreenEffects.firstWhere((effect) => effect.name == '雪花');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ConsolePanel(
+            brightness: 0,
+            alpha: 1,
+            baseColor: Colors.transparent,
+            settingsService: settings,
+            clockComponent: OverlayComponent.createClock(),
+            sloganComponent: OverlayComponent.createSlogan(),
+            watermarkComponent: OverlayComponent.createWatermark(),
+            onOverlayChanged: (_) {},
+            shaderFilterService: service,
+            focusModeConfig: FocusModeConfig(),
+            spotlightConfig: SpotlightConfig(),
+            automationRules: const [],
+            automationEnabled: false,
+            consoleHotkeyConfig: const ConsoleHotkeyConfig(),
+            onFocusModeChanged: (_) {},
+            onSpotlightChanged: (_) {},
+            onConsoleHotkeyChanged: (_) {},
+            regionMaskConfig: RegionMaskConfig(),
+            onRegionMaskChanged: (_) {},
+            onStartDrawingRegion: () {},
+            onAutomationRulesChanged: (_) {},
+            onAutomationEnabledChanged: (_) {},
+            onBrightnessChanged: (_) {},
+            onAlphaChanged: (_) {},
+            onBaseColorChanged: (_) {},
+            onClose: () {},
+            enableSystemProbes: false,
+          ),
+        ),
+      ),
+    );
+
+    await _openFilterPageAndRevealScreenEffects(tester);
+
+    var decoration = _tileDecoration(tester, effect.name);
+    var border = decoration.border as Border;
+    expect(decoration.color, const Color(0xFFFAFAFB));
+    expect(border.top.width, 1);
+
+    final result = service.compileShader(effect.hlslCode);
+    expect(result.success, isTrue);
+    service.updateScreenSize(const Size(1400, 900));
+    service.applyFilter(
+      FilterApplyMode.dynamic,
+      const Size(1400, 900),
+      Colors.white,
+      origin: FilterApplyOrigin.screenEffect,
+    );
+    await tester.pump();
+
+    decoration = _tileDecoration(tester, effect.name);
+    border = decoration.border as Border;
+    expect(decoration.color, effect.tileColor);
+    expect(border.top.color, effect.iconColor);
+    expect(border.top.width, 2);
+
+    service.stopFilter();
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('native overlay disables top-layer component controls', (
     tester,
   ) async {

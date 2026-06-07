@@ -7,8 +7,8 @@ bool shouldPaintBaseShader({
 }) {
   return shaderLoaded &&
       !sandboxActive &&
-      baseFilterEnabled &&
-      !forceClear; // !suppressForNativeRestore;抑制会导致无法正常渲染控制台
+      !forceClear &&
+      (baseFilterEnabled || suppressForNativeRestore);
 }
 
 bool shouldClearBaseShaderSurface({
@@ -19,8 +19,10 @@ bool shouldClearBaseShaderSurface({
   bool suppressForNativeRestore = false,
 }) {
   return forceClear ||
-      suppressForNativeRestore ||
-      (shaderLoaded && !sandboxActive && !baseFilterEnabled);
+      (!suppressForNativeRestore &&
+          shaderLoaded &&
+          !sandboxActive &&
+          !baseFilterEnabled);
 }
 
 bool shouldOpenPanelForNativeRestoreOnStartup({

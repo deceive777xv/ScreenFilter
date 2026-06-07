@@ -252,8 +252,13 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   Future<void> _finishStartupNativeRestoreAttempt(
     bool nativeRestoreSucceeded,
   ) async {
-    if (mounted && _suppressTopLayerForStartupNativeRestore) {
-      setState(() => _suppressTopLayerForStartupNativeRestore = false);
+    if (mounted &&
+        (_suppressBaseShaderForStartupNativeRestore ||
+            _suppressTopLayerForStartupNativeRestore)) {
+      setState(() {
+        _suppressBaseShaderForStartupNativeRestore = false;
+        _suppressTopLayerForStartupNativeRestore = false;
+      });
     }
     if (shouldOpenPanelAfterNativeRestoreAttempt(
       nativeRestorePendingOnStartup: _nativeRestorePendingOnStartup,
@@ -265,9 +270,6 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       await windowManager.setIgnoreMouseEvents(false);
       _scheduleTrayMenuRefresh();
       return;
-    }
-    if (nativeRestoreSucceeded && mounted) {
-      setState(() => _suppressBaseShaderForStartupNativeRestore = false);
     }
     if (_nativeRestorePendingOnStartup && !_isPanelOpen) {
       await windowManager.setIgnoreMouseEvents(true);
@@ -527,10 +529,15 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   void _rememberCurrentNativeFilter() {
     _trayFilterMemory.rememberNative(
       mode: _shaderFilterService.mode,
+      origin: _shaderFilterService.filterOrigin,
       accentColor: _shaderFilterService.accentColor,
       baseColor: _baseColor,
       alpha: _alpha,
       brightness: _brightness,
+      shaderCode:
+          _shaderFilterService.postProcessEffect == ScreenPostProcessEffect.none
+          ? _shaderFilterService.fullscreenShaderCode
+          : null,
       shaderCompiled: _shaderFilterService.isShaderCompiled,
       postProcessEffect: _shaderFilterService.postProcessEffect,
       postProcessIntensity: _shaderFilterService.postProcessIntensity,
@@ -538,9 +545,14 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   }
 
   bool _restoreNativeTrayFilter(TrayNativeFilterSnapshot snapshot) {
-    if (snapshot.postProcessEffect == ScreenPostProcessEffect.none &&
-        !_shaderFilterService.isShaderCompiled) {
-      return false;
+    if (snapshot.postProcessEffect == ScreenPostProcessEffect.none) {
+      final shaderCode = snapshot.shaderCode;
+      if (shaderCode != null && shaderCode.isNotEmpty) {
+        final result = _shaderFilterService.compileShader(shaderCode);
+        if (!result.success) return false;
+      } else if (!_shaderFilterService.isShaderCompiled) {
+        return false;
+      }
     }
 
     final media = MediaQuery.of(context);
@@ -560,6 +572,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       snapshot.accentColor,
       postProcessEffect: snapshot.postProcessEffect,
       postProcessIntensity: snapshot.postProcessIntensity,
+      origin: snapshot.origin,
     );
     unawaited(_persistNativeFilterRuntimeState());
     return true;
@@ -764,11 +777,25 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     unawaited(_persistNativeFilterRuntimeState());
   }
 
+  void _syncFilterVisualStateAfterControlChange() {
+    _shaderFilterService.updateFilterVisuals(
+      opacity: _alpha,
+      brightness: _brightness,
+    );
+    if (_shaderFilterService.mode != FilterApplyMode.none) {
+      _rememberCurrentNativeFilter();
+      unawaited(_persistNativeFilterRuntimeState());
+    } else {
+      _rememberCurrentBaseFilter();
+    }
+    _scheduleTrayMenuRefresh();
+  }
+
   Future<void> _exitFromTray() async {
     _basicFilterPersistDebouncer.flush();
     _settingsPersistDebouncer.flush();
     await _persistNativeFilterRuntimeState();
-    unawaited(_consoleHotkeyService.dispose());
+    await _consoleHotkeyService.dispose();
     _shaderFilterService.dispose();
     _systemTray.destroy();
     exit(0);
@@ -1076,7 +1103,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
               devicePixelRatio: dpr,
             ),
           ),
-           // 顶层组件（面板关闭时不可交互）
+          // 顶层组件（面板关闭时不可交互）
           if (shouldRenderTopLayerComponents(
             nativeOverlayActive: _nativeOverlayActive,
             startupNativeRestoreInProgress:
@@ -1145,6 +1172,8 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
 
   Widget _buildShaderFilter() {
     final sandboxActive = _shaderFilterService.mode != FilterApplyMode.none;
+    final startupNativeRestoreBaseWarmup =
+        _suppressBaseShaderForStartupNativeRestore && !sandboxActive;
     // 当沙盒/特效激活时，GLSL层全透明无需渲染，直接跳过以避免干扰DX11叠加层
     if (!shouldPaintBaseShader(
       shaderLoaded: _shader != null,
@@ -1174,8 +1203,8 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
         final paintState = BaseShaderPaintState(
           width: size.width,
           height: size.height,
-          brightness: _brightness,
-          alpha: _alpha,
+          brightness: startupNativeRestoreBaseWarmup ? 0.0 : _brightness,
+          alpha: startupNativeRestoreBaseWarmup ? 0.0 : _alpha,
           baseColorValue: _baseColor.toARGB32(),
         );
 
@@ -1227,12 +1256,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
           _brightness = v;
         });
         _scheduleBasicFilterPersist();
-        _shaderFilterService.updateFilterVisuals(
-          opacity: _alpha,
-          brightness: _brightness,
-        );
-        _rememberCurrentBaseFilter();
-        _scheduleTrayMenuRefresh();
+        _syncFilterVisualStateAfterControlChange();
       },
       onAlphaChanged: (v) {
         setState(() {
@@ -1240,12 +1264,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
           _alpha = v;
         });
         _scheduleBasicFilterPersist();
-        _shaderFilterService.updateFilterVisuals(
-          opacity: _alpha,
-          brightness: _brightness,
-        );
-        _rememberCurrentBaseFilter();
-        _scheduleTrayMenuRefresh();
+        _syncFilterVisualStateAfterControlChange();
       },
       onBaseColorChanged: (c) {
         setState(() {
@@ -1262,6 +1281,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
         _scheduleTrayMenuRefresh();
       },
       onClose: _togglePanel,
+      onExit: _exitFromTray,
       onFontFamilyChanged: widget.onFontFamilyChanged,
     );
   }

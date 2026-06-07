@@ -77,10 +77,12 @@ void main() {
     memory.rememberBasic(baseColor: Colors.amber, alpha: 0.2, brightness: -0.1);
     memory.rememberNative(
       mode: FilterApplyMode.dynamic,
+      origin: FilterApplyOrigin.screenEffect,
       accentColor: Colors.white,
       baseColor: Colors.transparent,
       alpha: 1.0,
       brightness: 0.0,
+      shaderCode: null,
       shaderCompiled: false,
       postProcessEffect: ScreenPostProcessEffect.mosaic,
       postProcessIntensity: 24.0,
@@ -91,6 +93,7 @@ void main() {
     expect(restore, isA<TrayNativeFilterSnapshot>());
     final native = restore as TrayNativeFilterSnapshot;
     expect(native.mode, FilterApplyMode.dynamic);
+    expect(native.origin, FilterApplyOrigin.screenEffect);
     expect(native.postProcessEffect, ScreenPostProcessEffect.mosaic);
     expect(native.postProcessIntensity, 24.0);
     expect(native.alpha, 1.0);
@@ -101,10 +104,12 @@ void main() {
 
     memory.rememberNative(
       mode: FilterApplyMode.dynamic,
+      origin: FilterApplyOrigin.screenEffect,
       accentColor: Colors.white,
       baseColor: Colors.transparent,
       alpha: 1.0,
       brightness: 0.0,
+      shaderCode: null,
       shaderCompiled: false,
       postProcessEffect: ScreenPostProcessEffect.mosaic,
       postProcessIntensity: 24.0,
@@ -122,5 +127,29 @@ void main() {
     expect(basic.baseColor, Colors.orange);
     expect(basic.alpha, 0.3);
     expect(basic.brightness, -0.2);
+  });
+
+  test('remembers native shader origin code and visual values', () {
+    final memory = TrayFilterMemory();
+
+    memory.rememberNative(
+      mode: FilterApplyMode.dynamic,
+      origin: FilterApplyOrigin.screenEffect,
+      accentColor: Colors.cyan,
+      baseColor: Colors.transparent,
+      alpha: 0.42,
+      brightness: -0.33,
+      shaderCode: 'float4 main() : SV_Target { return 1; }',
+      shaderCompiled: true,
+      postProcessEffect: ScreenPostProcessEffect.none,
+      postProcessIntensity: 24.0,
+    );
+
+    final native = memory.restoreTarget as TrayNativeFilterSnapshot;
+
+    expect(native.origin, FilterApplyOrigin.screenEffect);
+    expect(native.shaderCode, 'float4 main() : SV_Target { return 1; }');
+    expect(native.alpha, 0.42);
+    expect(native.brightness, -0.33);
   });
 }

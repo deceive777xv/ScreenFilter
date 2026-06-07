@@ -53,6 +53,7 @@ class ConsolePanel extends StatefulWidget {
   final Function(double) onAlphaChanged;
   final Function(Color) onBaseColorChanged;
   final VoidCallback onClose;
+  final Future<void> Function()? onExit;
   final Function(String)? onFontFamilyChanged;
   final bool enableSystemProbes;
 
@@ -85,6 +86,7 @@ class ConsolePanel extends StatefulWidget {
     required this.onAlphaChanged,
     required this.onBaseColorChanged,
     required this.onClose,
+    this.onExit,
     this.onFontFamilyChanged,
     this.enableSystemProbes = true,
   });
@@ -2870,7 +2872,14 @@ class _ConsolePanelState extends State<ConsolePanel> {
                   '完全退出程序',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
-                onPressed: () => exit(0),
+                onPressed: () async {
+                  final onExit = widget.onExit;
+                  if (onExit != null) {
+                    await onExit();
+                    return;
+                  }
+                  exit(0);
+                },
               ),
             ),
           ),

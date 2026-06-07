@@ -53,9 +53,18 @@ void main() {
     );
   });
 
-  test('native restore startup suppresses base shader painting', () {
+  test('native restore startup keeps the base shader layer paintable', () {
     expect(
       shouldPaintBaseShader(
+        shaderLoaded: true,
+        sandboxActive: false,
+        baseFilterEnabled: true,
+        suppressForNativeRestore: true,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldClearBaseShaderSurface(
         shaderLoaded: true,
         sandboxActive: false,
         baseFilterEnabled: true,
@@ -64,10 +73,10 @@ void main() {
       isFalse,
     );
     expect(
-      shouldClearBaseShaderSurface(
+      shouldPaintBaseShader(
         shaderLoaded: true,
         sandboxActive: false,
-        baseFilterEnabled: true,
+        baseFilterEnabled: false,
         suppressForNativeRestore: true,
       ),
       isTrue,
@@ -153,10 +162,7 @@ void main() {
   });
 
   test('native overlay suppresses top-layer components and controls', () {
-    expect(
-      shouldRenderTopLayerComponents(nativeOverlayActive: true),
-      isFalse,
-    );
+    expect(shouldRenderTopLayerComponents(nativeOverlayActive: true), isFalse);
     expect(
       shouldRenderTopLayerComponents(
         nativeOverlayActive: false,
@@ -164,10 +170,7 @@ void main() {
       ),
       isFalse,
     );
-    expect(
-      shouldRenderTopLayerComponents(nativeOverlayActive: false),
-      isTrue,
-    );
+    expect(shouldRenderTopLayerComponents(nativeOverlayActive: false), isTrue);
     expect(
       shouldShowOverlayComponentControlActiveState(
         componentEnabled: true,
