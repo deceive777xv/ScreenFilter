@@ -32,6 +32,36 @@ void main() {
       expect(releaseBody, contains('g_overlayRelativeFlutterWindow = nullptr'));
     },
   );
+
+  test('native overlay is shown only after the first presented frame', () {
+    final source = File(
+      'native/dx11_shader_engine/src/shader_engine.cpp',
+    ).readAsStringSync();
+    final createWindowBody = _extractFunctionBody(
+      source,
+      'CreateOverlayWindow',
+    );
+    final positionBody = _extractFunctionBody(source, 'PositionOverlayWindow');
+    final renderCompositeBody = _extractFunctionBody(
+      source,
+      'RenderCompositeToOverlay',
+    );
+    final showAfterFirstFrameBody = _extractFunctionBody(
+      source,
+      'ShowOverlayWindowAfterFirstFrame',
+    );
+    final releaseBody = _extractFunctionBody(source, 'ReleaseOverlayResources');
+
+    expect(createWindowBody, isNot(contains('ShowWindow')));
+    expect(positionBody, contains('showWindow'));
+    expect(positionBody, contains('SWP_SHOWWINDOW'));
+    expect(renderCompositeBody, contains('ShowOverlayWindowAfterFirstFrame'));
+    expect(
+      showAfterFirstFrameBody,
+      contains('g_overlayHasPresentedFrame = true'),
+    );
+    expect(releaseBody, contains('g_overlayHasPresentedFrame = false'));
+  });
 }
 
 String _extractFunctionBody(String source, String functionName) {

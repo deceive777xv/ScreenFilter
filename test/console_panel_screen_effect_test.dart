@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:screen_filter_app/models/advanced_config.dart';
 import 'package:screen_filter_app/models/overlay_component.dart';
+import 'package:screen_filter_app/models/screen_effect.dart';
 import 'package:screen_filter_app/models/screen_post_process_effect.dart';
 import 'package:screen_filter_app/services/dx11_shader_ffi.dart';
 import 'package:screen_filter_app/services/settings_service.dart';
@@ -297,6 +298,78 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('restored built-in screen effect highlights the matching tile', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+    });
+
+    SharedPreferences.setMockInitialValues({});
+    final settings = await SettingsService.init();
+    final engine = _FakeDX11ShaderEngine();
+    final service = ShaderFilterService(engine: engine)..init();
+    final effect = kScreenEffects.firstWhere((effect) => effect.name == '雪花');
+
+    final result = service.compileShader(effect.hlslCode);
+    expect(result.success, isTrue);
+    service.updateScreenSize(const Size(1400, 900));
+    service.applyFilter(
+      FilterApplyMode.dynamic,
+      const Size(1400, 900),
+      Colors.white,
+      origin: FilterApplyOrigin.screenEffect,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ConsolePanel(
+            brightness: 0,
+            alpha: 1,
+            baseColor: Colors.transparent,
+            settingsService: settings,
+            clockComponent: OverlayComponent.createClock(),
+            sloganComponent: OverlayComponent.createSlogan(),
+            watermarkComponent: OverlayComponent.createWatermark(),
+            onOverlayChanged: (_) {},
+            shaderFilterService: service,
+            focusModeConfig: FocusModeConfig(),
+            spotlightConfig: SpotlightConfig(),
+            automationRules: const [],
+            automationEnabled: false,
+            consoleHotkeyConfig: const ConsoleHotkeyConfig(),
+            onFocusModeChanged: (_) {},
+            onSpotlightChanged: (_) {},
+            onConsoleHotkeyChanged: (_) {},
+            regionMaskConfig: RegionMaskConfig(),
+            onRegionMaskChanged: (_) {},
+            onStartDrawingRegion: () {},
+            onAutomationRulesChanged: (_) {},
+            onAutomationEnabledChanged: (_) {},
+            onBrightnessChanged: (_) {},
+            onAlphaChanged: (_) {},
+            onBaseColorChanged: (_) {},
+            onClose: () {},
+            enableSystemProbes: false,
+          ),
+        ),
+      ),
+    );
+
+    await _openFilterPageAndRevealScreenEffects(tester);
+
+    final decoration = _tileDecoration(tester, effect.name);
+    final border = decoration.border as Border;
+    expect(decoration.color, effect.tileColor);
+    expect(border.top.color, effect.iconColor);
+    expect(border.top.width, 2);
+
+    service.stopFilter();
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('sandbox filter updates console visuals and clears on cancel', (
     tester,
   ) async {
@@ -394,6 +467,16 @@ Future<void> _openFilterPageAndRevealScreenEffects(WidgetTester tester) async {
     await tester.drag(find.byType(ListView).last, const Offset(0, -350));
     await tester.pump();
   }
+}
+
+BoxDecoration _tileDecoration(WidgetTester tester, String label) {
+  final tileFinder = find.ancestor(
+    of: find.text(label),
+    matching: find.byType(AnimatedContainer),
+  );
+  expect(tileFinder, findsWidgets);
+  return tester.widget<AnimatedContainer>(tileFinder.first).decoration!
+      as BoxDecoration;
 }
 
 class _FakeDX11ShaderEngine implements DX11ShaderEngine {

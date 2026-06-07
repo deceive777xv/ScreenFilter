@@ -3,8 +3,13 @@ bool shouldPaintBaseShader({
   required bool sandboxActive,
   required bool baseFilterEnabled,
   bool forceClear = false,
+  bool suppressForNativeRestore = false,
 }) {
-  return shaderLoaded && !sandboxActive && baseFilterEnabled && !forceClear;
+  return shaderLoaded &&
+      !sandboxActive &&
+      baseFilterEnabled &&
+      !forceClear &&
+      !suppressForNativeRestore;
 }
 
 bool shouldClearBaseShaderSurface({
@@ -12,14 +17,38 @@ bool shouldClearBaseShaderSurface({
   required bool sandboxActive,
   required bool baseFilterEnabled,
   bool forceClear = false,
+  bool suppressForNativeRestore = false,
 }) {
-  return forceClear || (shaderLoaded && !sandboxActive && !baseFilterEnabled);
+  return forceClear ||
+      suppressForNativeRestore ||
+      (shaderLoaded && !sandboxActive && !baseFilterEnabled);
 }
 
 bool shouldOpenPanelForNativeRestoreOnStartup({
   required bool hasLastNativeFilterState,
 }) {
+  return false;
+}
+
+bool shouldPrimeNativeRestoreOnStartup({
+  required bool hasLastNativeFilterState,
+}) {
   return hasLastNativeFilterState;
+}
+
+bool shouldRenderPanel({
+  required bool panelOpen,
+  required bool nativeRestoreStartupPending,
+  required bool startupSurfaceReady,
+}) {
+  return panelOpen;
+}
+
+bool shouldOpenPanelAfterNativeRestoreAttempt({
+  required bool nativeRestorePendingOnStartup,
+  required bool nativeRestoreSucceeded,
+}) {
+  return nativeRestorePendingOnStartup && !nativeRestoreSucceeded;
 }
 
 class BaseShaderPaintState {

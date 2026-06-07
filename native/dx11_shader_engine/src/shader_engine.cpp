@@ -52,6 +52,7 @@ static int32_t                 g_screenWidth   = 0;
 static int32_t                 g_screenHeight  = 0;
 static DXGI_FORMAT             g_screenFormat  = DXGI_FORMAT_UNKNOWN;
 static bool                    g_overlayBoundsValid = false;
+static bool                    g_overlayHasPresentedFrame = false;
 static int                     g_overlayX      = 0;
 static int                     g_overlayY      = 0;
 static int                     g_overlayWindowWidth = 0;
@@ -451,6 +452,7 @@ static void ReleaseOverlayResources() {
         g_overlayWindow = nullptr;
     }
     g_overlayBoundsValid = false;
+    g_overlayHasPresentedFrame = false;
     g_overlayPlacedBehindFlutter = false;
     g_overlayRelativeFlutterWindow = nullptr;
     g_cachedFlutterWindow = nullptr;
@@ -538,7 +540,8 @@ static HWND FindFlutterWindowCached(bool force) {
 static void PositionOverlayWindow(
     int32_t width,
     int32_t height,
-    bool force = false
+    bool force = false,
+    bool showWindow = true
 ) {
     if (!g_overlayWindow) return;
 
@@ -565,23 +568,26 @@ static void PositionOverlayWindow(
         }
     }
 
+    const bool needsShow = showWindow && !IsWindowVisible(g_overlayWindow);
     if (g_overlayBoundsValid &&
         x == g_overlayX && y == g_overlayY &&
         w == g_overlayWindowWidth && h == g_overlayWindowHeight &&
+        !needsShow &&
         (!flutterWindow ||
             (g_overlayPlacedBehindFlutter &&
              g_overlayRelativeFlutterWindow == flutterWindow))) {
         return;
     }
 
+    const UINT flags = SWP_NOACTIVATE | (showWindow ? SWP_SHOWWINDOW : 0);
     SetWindowPos(
         g_overlayWindow, HWND_TOPMOST, x, y, w, h,
-        SWP_NOACTIVATE | SWP_SHOWWINDOW
+        flags
     );
     if (flutterWindow) {
         SetWindowPos(
             g_overlayWindow, flutterWindow, x, y, w, h,
-            SWP_NOACTIVATE | SWP_SHOWWINDOW
+            flags
         );
     }
 
@@ -619,8 +625,7 @@ static bool CreateOverlayWindow(int32_t width, int32_t height) {
     if (!g_overlayWindow) return false;
 
     SetLayeredWindowAttributes(g_overlayWindow, 0, 255, LWA_ALPHA);
-    ShowWindow(g_overlayWindow, SW_SHOWNOACTIVATE);
-    PositionOverlayWindow(width, height, true);
+    PositionOverlayWindow(width, height, true, false);
     return true;
 }
 
@@ -651,6 +656,10 @@ static bool EnsureCompositionTarget() {
 
 static bool CreateOverlaySwapChain(int32_t width, int32_t height) {
     ReleaseOverlaySwapChain();
+    g_overlayHasPresentedFrame = false;
+    if (g_overlayWindow) {
+        ShowWindow(g_overlayWindow, SW_HIDE);
+    }
     if (!g_device || !g_dcompDevice || !g_dcompTarget || !g_dcompVisual) {
         return false;
     }
@@ -718,11 +727,17 @@ static bool EnsureOverlay(int32_t width, int32_t height) {
     if (!EnsureCompositionTarget()) return false;
 
     if (!g_overlaySwapChain || width != g_overlayWidth || height != g_overlayHeight) {
-        PositionOverlayWindow(width, height, true);
+        PositionOverlayWindow(width, height, true, g_overlayHasPresentedFrame);
         return CreateOverlaySwapChain(width, height);
     }
-    PositionOverlayWindow(width, height);
+    PositionOverlayWindow(width, height, false, g_overlayHasPresentedFrame);
     return true;
+}
+
+static void ShowOverlayWindowAfterFirstFrame(int32_t width, int32_t height) {
+    if (!g_overlayWindow || g_overlayHasPresentedFrame) return;
+    g_overlayHasPresentedFrame = true;
+    PositionOverlayWindow(width, height, true, true);
 }
 
 static bool RenderUserShaderToTarget(
@@ -861,7 +876,11 @@ static bool RenderCompositeToOverlay(int32_t width, int32_t height) {
     g_context->PSSetShaderResources(0, 2, nullSrvs);
 
     hr = g_overlaySwapChain->Present(1, 0);
-    return SUCCEEDED(hr);
+    if (SUCCEEDED(hr)) {
+        ShowOverlayWindowAfterFirstFrame(width, height);
+        return true;
+    }
+    return false;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

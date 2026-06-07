@@ -53,13 +53,101 @@ void main() {
     );
   });
 
-  test('opens the panel on startup when native filter restore is pending', () {
+  test('native restore startup suppresses base shader painting', () {
     expect(
-      shouldOpenPanelForNativeRestoreOnStartup(hasLastNativeFilterState: true),
+      shouldPaintBaseShader(
+        shaderLoaded: true,
+        sandboxActive: false,
+        baseFilterEnabled: true,
+        suppressForNativeRestore: true,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldClearBaseShaderSurface(
+        shaderLoaded: true,
+        sandboxActive: false,
+        baseFilterEnabled: true,
+        suppressForNativeRestore: true,
+      ),
+      isTrue,
+    );
+  });
+
+  test('primes native restore on startup without opening the panel', () {
+    expect(
+      shouldPrimeNativeRestoreOnStartup(hasLastNativeFilterState: true),
       isTrue,
     );
     expect(
+      shouldPrimeNativeRestoreOnStartup(hasLastNativeFilterState: false),
+      isFalse,
+    );
+    expect(
+      shouldOpenPanelForNativeRestoreOnStartup(hasLastNativeFilterState: true),
+      isFalse,
+    );
+    expect(
       shouldOpenPanelForNativeRestoreOnStartup(hasLastNativeFilterState: false),
+      isFalse,
+    );
+  });
+
+  test('renders panel whenever the panel flag is open', () {
+    expect(
+      shouldRenderPanel(
+        panelOpen: true,
+        nativeRestoreStartupPending: true,
+        startupSurfaceReady: false,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldRenderPanel(
+        panelOpen: true,
+        nativeRestoreStartupPending: true,
+        startupSurfaceReady: true,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldRenderPanel(
+        panelOpen: true,
+        nativeRestoreStartupPending: false,
+        startupSurfaceReady: false,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldRenderPanel(
+        panelOpen: false,
+        nativeRestoreStartupPending: true,
+        startupSurfaceReady: true,
+      ),
+      isFalse,
+    );
+  });
+
+  test('opens startup panel only when native restore fails', () {
+    expect(
+      shouldOpenPanelAfterNativeRestoreAttempt(
+        nativeRestorePendingOnStartup: true,
+        nativeRestoreSucceeded: false,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldOpenPanelAfterNativeRestoreAttempt(
+        nativeRestorePendingOnStartup: true,
+        nativeRestoreSucceeded: true,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldOpenPanelAfterNativeRestoreAttempt(
+        nativeRestorePendingOnStartup: false,
+        nativeRestoreSucceeded: false,
+      ),
       isFalse,
     );
   });

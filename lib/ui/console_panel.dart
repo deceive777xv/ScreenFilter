@@ -147,10 +147,7 @@ class _ConsolePanelState extends State<ConsolePanel> {
     final filterActive = svc != null && svc.mode != FilterApplyMode.none;
     _sandboxActive = svc?.isSandboxFilterActive ?? false;
     if (filterActive) _activePresetName = null;
-    if ((svc?.isScreenEffectActive ?? false) &&
-        svc?.postProcessEffect == ScreenPostProcessEffect.mosaic) {
-      _activeEffectName = _mosaicEffectName;
-    }
+    _activeEffectName = _screenEffectNameFromService(svc);
     widget.shaderFilterService?.modeNotifier.addListener(_onSandboxModeChanged);
     _selectedFont = widget.settingsService.getFontFamily();
     if (widget.enableSystemProbes) {
@@ -181,10 +178,23 @@ class _ConsolePanelState extends State<ConsolePanel> {
       _sandboxActive = origin == FilterApplyOrigin.sandbox;
       if (!active || origin == FilterApplyOrigin.sandbox) {
         _activeEffectName = null;
-      } else if (svc.postProcessEffect == ScreenPostProcessEffect.mosaic) {
-        _activeEffectName ??= _mosaicEffectName;
+      } else {
+        _activeEffectName = _screenEffectNameFromService(svc);
       }
     });
+  }
+
+  String? _screenEffectNameFromService(ShaderFilterService? svc) {
+    if (!(svc?.isScreenEffectActive ?? false)) return null;
+    if (svc!.postProcessEffect == ScreenPostProcessEffect.mosaic) {
+      return _mosaicEffectName;
+    }
+    final shaderCode = svc.fullscreenShaderCode;
+    if (shaderCode == null || shaderCode.isEmpty) return null;
+    for (final effect in kScreenEffects) {
+      if (effect.hlslCode == shaderCode) return effect.name;
+    }
+    return null;
   }
 
   Future<void> _applyScreenEffect(ScreenEffect effect) async {
