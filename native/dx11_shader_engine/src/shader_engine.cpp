@@ -56,6 +56,8 @@ static int                     g_overlayX      = 0;
 static int                     g_overlayY      = 0;
 static int                     g_overlayWindowWidth = 0;
 static int                     g_overlayWindowHeight = 0;
+static bool                    g_overlayPlacedBehindFlutter = false;
+static HWND                    g_overlayRelativeFlutterWindow = nullptr;
 static HWND                    g_cachedFlutterWindow = nullptr;
 static ULONGLONG               g_lastFlutterWindowSearchTick = 0;
 static ULONGLONG               g_lastOverlayPositionTick = 0;
@@ -449,6 +451,8 @@ static void ReleaseOverlayResources() {
         g_overlayWindow = nullptr;
     }
     g_overlayBoundsValid = false;
+    g_overlayPlacedBehindFlutter = false;
+    g_overlayRelativeFlutterWindow = nullptr;
     g_cachedFlutterWindow = nullptr;
     g_lastFlutterWindowSearchTick = 0;
     g_lastOverlayPositionTick = 0;
@@ -563,7 +567,10 @@ static void PositionOverlayWindow(
 
     if (g_overlayBoundsValid &&
         x == g_overlayX && y == g_overlayY &&
-        w == g_overlayWindowWidth && h == g_overlayWindowHeight) {
+        w == g_overlayWindowWidth && h == g_overlayWindowHeight &&
+        (!flutterWindow ||
+            (g_overlayPlacedBehindFlutter &&
+             g_overlayRelativeFlutterWindow == flutterWindow))) {
         return;
     }
 
@@ -583,6 +590,8 @@ static void PositionOverlayWindow(
     g_overlayY = y;
     g_overlayWindowWidth = w;
     g_overlayWindowHeight = h;
+    g_overlayPlacedBehindFlutter = flutterWindow != nullptr;
+    g_overlayRelativeFlutterWindow = flutterWindow;
 }
 
 static bool CreateOverlayWindow(int32_t width, int32_t height) {

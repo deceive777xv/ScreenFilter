@@ -2,16 +2,24 @@ bool shouldPaintBaseShader({
   required bool shaderLoaded,
   required bool sandboxActive,
   required bool baseFilterEnabled,
+  bool forceClear = false,
 }) {
-  return shaderLoaded && !sandboxActive && baseFilterEnabled;
+  return shaderLoaded && !sandboxActive && baseFilterEnabled && !forceClear;
 }
 
 bool shouldClearBaseShaderSurface({
   required bool shaderLoaded,
   required bool sandboxActive,
   required bool baseFilterEnabled,
+  bool forceClear = false,
 }) {
-  return shaderLoaded && !sandboxActive && !baseFilterEnabled;
+  return forceClear || (shaderLoaded && !sandboxActive && !baseFilterEnabled);
+}
+
+bool shouldOpenPanelForNativeRestoreOnStartup({
+  required bool hasLastNativeFilterState,
+}) {
+  return hasLastNativeFilterState;
 }
 
 class BaseShaderPaintState {

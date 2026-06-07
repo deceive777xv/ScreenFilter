@@ -32,6 +32,38 @@ void main() {
     );
   });
 
+  test('force clear takes precedence over painting an active base filter', () {
+    expect(
+      shouldPaintBaseShader(
+        shaderLoaded: true,
+        sandboxActive: false,
+        baseFilterEnabled: true,
+        forceClear: true,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldClearBaseShaderSurface(
+        shaderLoaded: false,
+        sandboxActive: true,
+        baseFilterEnabled: true,
+        forceClear: true,
+      ),
+      isTrue,
+    );
+  });
+
+  test('opens the panel on startup when native filter restore is pending', () {
+    expect(
+      shouldOpenPanelForNativeRestoreOnStartup(hasLastNativeFilterState: true),
+      isTrue,
+    );
+    expect(
+      shouldOpenPanelForNativeRestoreOnStartup(hasLastNativeFilterState: false),
+      isFalse,
+    );
+  });
+
   test('paints base shader only when loaded, active, and not sandboxed', () {
     expect(
       shouldPaintBaseShader(

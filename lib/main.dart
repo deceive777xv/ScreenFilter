@@ -146,11 +146,13 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   late final AutomationPresetController _automationPresetController;
   late final ConsoleHotkeyService _consoleHotkeyService;
   bool _isDrawingRegion = false;
+  bool _clearSurfaceBeforeNativeRestore = false;
   final TrayFilterMemory _trayFilterMemory = TrayFilterMemory();
   late final DebouncedAction _basicFilterPersistDebouncer;
   late final DebouncedAction _trayMenuRefreshDebouncer;
   late final KeyedDebouncedAction<String> _settingsPersistDebouncer;
   TrayMenuState? _lastAppliedTrayMenuState;
+  late final bool _openPanelForNativeRestoreOnStartup;
 
   SettingsService get _settings => widget.settingsService;
 
@@ -161,6 +163,12 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     _brightness = _settings.getBrightness();
     _alpha = _settings.getAlpha();
     _baseColor = _settings.getBaseColor();
+    _openPanelForNativeRestoreOnStartup =
+        shouldOpenPanelForNativeRestoreOnStartup(
+          hasLastNativeFilterState:
+              _settings.getLastNativeFilterState() != null,
+        );
+    _isPanelOpen = _openPanelForNativeRestoreOnStartup;
 
     // 加载顶层组件
     _clockComponent = _settings.getOverlayComponent(OverlayType.clock);
@@ -197,7 +205,8 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     );
     _shaderFilterService.init();
     _shaderFilterService.modeNotifier.addListener(_onSandboxModeChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _ensureStartupPanelCanReceiveInput();
       _restoreLastNativeFilterOnStartup();
     });
 
@@ -221,6 +230,18 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     }
     unawaited(_persistNativeFilterRuntimeState());
     setState(() {});
+    _scheduleTrayMenuRefresh();
+  }
+
+  Future<void> _ensureStartupPanelCanReceiveInput() async {
+    if (!_openPanelForNativeRestoreOnStartup || !mounted) return;
+    if (!_isPanelOpen) {
+      setState(() => _isPanelOpen = true);
+    }
+    await windowManager.setIgnoreMouseEvents(false);
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!mounted || !_isPanelOpen) return;
+    await windowManager.setIgnoreMouseEvents(false);
     _scheduleTrayMenuRefresh();
   }
 
@@ -525,6 +546,9 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       return;
     }
 
+    final restoreScreenSize = await _waitForStableFullscreenSurface();
+    if (!mounted || restoreScreenSize == Size.zero) return;
+
     final shaderCode = snapshot.shaderCode;
     if (postProcessEffect == ScreenPostProcessEffect.none) {
       final codeToCompile = shaderCode?.isNotEmpty == true
@@ -540,14 +564,17 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       if (!result.success) return;
     }
 
-    final media = MediaQuery.of(context);
+    await _clearFlutterSurfaceBeforeNativeRestore();
+    if (!mounted) return;
+
+    final dpr = View.of(context).devicePixelRatio;
     setState(() {
       _baseColor = snapshot.baseColor;
       _alpha = snapshot.alpha;
       _brightness = snapshot.brightness;
     });
-    _shaderFilterService.updateScreenSize(media.size);
-    _shaderFilterService.updateDevicePixelRatio(media.devicePixelRatio);
+    _shaderFilterService.updateScreenSize(restoreScreenSize);
+    _shaderFilterService.updateDevicePixelRatio(dpr);
     _shaderFilterService.updateAccentColor(snapshot.accentColor);
     _shaderFilterService.updateFilterVisuals(
       opacity: _alpha,
@@ -555,7 +582,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     );
     _shaderFilterService.applyFilter(
       mode,
-      media.size,
+      restoreScreenSize,
       snapshot.accentColor,
       postProcessEffect: postProcessEffect,
       postProcessIntensity: snapshot.postProcessIntensity,
@@ -563,6 +590,57 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
     );
     _persistBasicFilterNow(activePreset: null, includeActivePreset: true);
     await _persistNativeFilterRuntimeState();
+  }
+
+  Future<Size> _waitForStableFullscreenSurface() async {
+    await windowManager.setFullScreen(true);
+    Size? previousSize;
+    var stableFrames = 0;
+    final deadline = DateTime.now().add(const Duration(seconds: 3));
+
+    while (mounted && DateTime.now().isBefore(deadline)) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return Size.zero;
+
+      final isFullscreen = await windowManager.isFullScreen();
+      if (!mounted) return Size.zero;
+
+      final size = _currentFlutterViewLogicalSize();
+      if (isFullscreen && _isUsableSurfaceSize(size)) {
+        final previous = previousSize;
+        stableFrames = previous != null && _sizesClose(size, previous)
+            ? stableFrames + 1
+            : 0;
+        if (stableFrames >= 1) return size;
+      }
+
+      previousSize = size;
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+
+    return Size.zero;
+  }
+
+  Size _currentFlutterViewLogicalSize() {
+    final view = View.of(context);
+    final dpr = view.devicePixelRatio <= 0 ? 1.0 : view.devicePixelRatio;
+    return Size(view.physicalSize.width / dpr, view.physicalSize.height / dpr);
+  }
+
+  bool _isUsableSurfaceSize(Size size) => size.width > 0 && size.height > 0;
+
+  bool _sizesClose(Size a, Size b) {
+    const tolerance = 1.0;
+    return (a.width - b.width).abs() <= tolerance &&
+        (a.height - b.height).abs() <= tolerance;
+  }
+
+  Future<void> _clearFlutterSurfaceBeforeNativeRestore() async {
+    setState(() => _clearSurfaceBeforeNativeRestore = true);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    setState(() => _clearSurfaceBeforeNativeRestore = false);
+    await WidgetsBinding.instance.endOfFrame;
   }
 
   Future<void> _persistNativeFilterRuntimeState() {
@@ -1021,11 +1099,13 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       shaderLoaded: _shader != null,
       sandboxActive: sandboxActive,
       baseFilterEnabled: _baseFilterEnabled,
+      forceClear: _clearSurfaceBeforeNativeRestore,
     )) {
       if (shouldClearBaseShaderSurface(
         shaderLoaded: _shader != null,
         sandboxActive: sandboxActive,
         baseFilterEnabled: _baseFilterEnabled,
+        forceClear: _clearSurfaceBeforeNativeRestore,
       )) {
         return const CustomPaint(
           size: Size.infinite,
