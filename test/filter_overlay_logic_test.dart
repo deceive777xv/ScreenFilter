@@ -158,6 +158,13 @@ void main() {
       isFalse,
     );
     expect(
+      shouldRenderTopLayerComponents(
+        nativeOverlayActive: false,
+        startupNativeRestoreInProgress: true,
+      ),
+      isFalse,
+    );
+    expect(
       shouldRenderTopLayerComponents(nativeOverlayActive: false),
       isTrue,
     );

@@ -148,6 +148,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   bool _isDrawingRegion = false;
   bool _clearSurfaceBeforeNativeRestore = false;
   bool _suppressBaseShaderForStartupNativeRestore = false;
+  bool _suppressTopLayerForStartupNativeRestore = false;
   final TrayFilterMemory _trayFilterMemory = TrayFilterMemory();
   late final DebouncedAction _basicFilterPersistDebouncer;
   late final DebouncedAction _trayMenuRefreshDebouncer;
@@ -170,6 +171,7 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       hasLastNativeFilterState: hasLastNativeFilterState,
     );
     _suppressBaseShaderForStartupNativeRestore = _nativeRestorePendingOnStartup;
+    _suppressTopLayerForStartupNativeRestore = _nativeRestorePendingOnStartup;
     _isPanelOpen = shouldOpenPanelForNativeRestoreOnStartup(
       hasLastNativeFilterState: hasLastNativeFilterState,
     );
@@ -250,6 +252,9 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
   Future<void> _finishStartupNativeRestoreAttempt(
     bool nativeRestoreSucceeded,
   ) async {
+    if (mounted && _suppressTopLayerForStartupNativeRestore) {
+      setState(() => _suppressTopLayerForStartupNativeRestore = false);
+    }
     if (shouldOpenPanelAfterNativeRestoreAttempt(
       nativeRestorePendingOnStartup: _nativeRestorePendingOnStartup,
       nativeRestoreSucceeded: nativeRestoreSucceeded,
@@ -1074,6 +1079,8 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
            // 顶层组件（面板关闭时不可交互）
           if (shouldRenderTopLayerComponents(
             nativeOverlayActive: _nativeOverlayActive,
+            startupNativeRestoreInProgress:
+                _suppressTopLayerForStartupNativeRestore,
           ))
             Positioned.fill(
               child: IgnorePointer(

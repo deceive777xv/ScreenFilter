@@ -50,8 +50,11 @@ bool shouldOpenPanelAfterNativeRestoreAttempt({
   return nativeRestorePendingOnStartup && !nativeRestoreSucceeded;
 }
 
-bool shouldRenderTopLayerComponents({required bool nativeOverlayActive}) {
-  return !nativeOverlayActive;
+bool shouldRenderTopLayerComponents({
+  required bool nativeOverlayActive,
+  bool startupNativeRestoreInProgress = false,
+}) {
+  return !nativeOverlayActive && !startupNativeRestoreInProgress;
 }
 
 bool shouldShowOverlayComponentControlActiveState({
