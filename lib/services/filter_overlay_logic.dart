@@ -8,8 +8,7 @@ bool shouldPaintBaseShader({
   return shaderLoaded &&
       !sandboxActive &&
       baseFilterEnabled &&
-      !forceClear &&
-      !suppressForNativeRestore;
+      !forceClear; // !suppressForNativeRestore;抑制会导致无法正常渲染控制台
 }
 
 bool shouldClearBaseShaderSurface({
