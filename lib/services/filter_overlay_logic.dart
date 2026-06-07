@@ -51,6 +51,21 @@ bool shouldOpenPanelAfterNativeRestoreAttempt({
   return nativeRestorePendingOnStartup && !nativeRestoreSucceeded;
 }
 
+bool shouldRenderTopLayerComponents({required bool nativeOverlayActive}) {
+  return !nativeOverlayActive;
+}
+
+bool shouldShowOverlayComponentControlActiveState({
+  required bool componentEnabled,
+  required bool nativeOverlayActive,
+}) {
+  return componentEnabled && !nativeOverlayActive;
+}
+
+bool shouldAllowOverlayComponentControl({required bool nativeOverlayActive}) {
+  return !nativeOverlayActive;
+}
+
 class BaseShaderPaintState {
   const BaseShaderPaintState({
     required this.width,

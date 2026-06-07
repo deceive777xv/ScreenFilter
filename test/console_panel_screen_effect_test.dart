@@ -370,6 +370,91 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('native overlay disables top-layer component controls', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+    });
+
+    SharedPreferences.setMockInitialValues({});
+    final settings = await SettingsService.init();
+    final engine = _FakeDX11ShaderEngine();
+    final service = ShaderFilterService(engine: engine)..init();
+    final clock = OverlayComponent.createClock()..enabled = true;
+    var overlayChanged = false;
+
+    service.updateScreenSize(const Size(1400, 900));
+    service.applyFilter(
+      FilterApplyMode.dynamic,
+      const Size(1400, 900),
+      Colors.white,
+      postProcessEffect: ScreenPostProcessEffect.mosaic,
+      origin: FilterApplyOrigin.screenEffect,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ConsolePanel(
+            brightness: 0,
+            alpha: 1,
+            baseColor: Colors.transparent,
+            settingsService: settings,
+            clockComponent: clock,
+            sloganComponent: OverlayComponent.createSlogan(),
+            watermarkComponent: OverlayComponent.createWatermark(),
+            onOverlayChanged: (_) => overlayChanged = true,
+            shaderFilterService: service,
+            focusModeConfig: FocusModeConfig(),
+            spotlightConfig: SpotlightConfig(),
+            automationRules: const [],
+            automationEnabled: false,
+            consoleHotkeyConfig: const ConsoleHotkeyConfig(),
+            onFocusModeChanged: (_) {},
+            onSpotlightChanged: (_) {},
+            onConsoleHotkeyChanged: (_) {},
+            regionMaskConfig: RegionMaskConfig(),
+            onRegionMaskChanged: (_) {},
+            onStartDrawingRegion: () {},
+            onAutomationRulesChanged: (_) {},
+            onAutomationEnabledChanged: (_) {},
+            onBrightnessChanged: (_) {},
+            onAlphaChanged: (_) {},
+            onBaseColorChanged: (_) {},
+            onClose: () {},
+            enableSystemProbes: false,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('滤镜'));
+    await tester.pump();
+    for (var i = 0; i < 2; i++) {
+      await tester.drag(find.byType(ListView).last, const Offset(0, -240));
+      await tester.pump();
+    }
+
+    final decoration = _tileDecoration(tester, '时钟');
+    final border = decoration.border as Border;
+    expect(decoration.color, const Color(0xFFFAFAFB));
+    expect(border.top.color, const Color(0xFFE5E7EB));
+    expect(border.top.width, 1);
+
+    await tester.ensureVisible(find.text('时钟'));
+    await tester.pump();
+    await tester.tap(find.text('时钟'));
+    await tester.pump();
+
+    expect(clock.enabled, isTrue);
+    expect(overlayChanged, isFalse);
+
+    service.stopFilter();
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('sandbox filter updates console visuals and clears on cancel', (
     tester,
   ) async {

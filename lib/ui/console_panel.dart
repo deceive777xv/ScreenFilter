@@ -12,6 +12,7 @@ import '../models/overlay_component.dart';
 import '../models/screen_effect.dart';
 import '../models/screen_post_process_effect.dart';
 import '../models/advanced_config.dart';
+import '../services/filter_overlay_logic.dart';
 import 'sandbox/shader_sandbox_page.dart';
 import 'advanced/advanced_page.dart';
 import '../services/settings_service.dart';
@@ -107,6 +108,7 @@ class _ConsolePanelState extends State<ConsolePanel> {
 
   String? _activePresetName;
   bool _sandboxActive = false;
+  bool _nativeOverlayActive = false;
 
   // 常规设置状态
   bool _startupEnabled = false;
@@ -145,6 +147,7 @@ class _ConsolePanelState extends State<ConsolePanel> {
     _activePresetName = widget.settingsService.getActivePreset();
     final svc = widget.shaderFilterService;
     final filterActive = svc != null && svc.mode != FilterApplyMode.none;
+    _nativeOverlayActive = filterActive;
     _sandboxActive = svc?.isSandboxFilterActive ?? false;
     if (filterActive) _activePresetName = null;
     _activeEffectName = _screenEffectNameFromService(svc);
@@ -176,6 +179,7 @@ class _ConsolePanelState extends State<ConsolePanel> {
     final origin = active ? svc.filterOrigin : FilterApplyOrigin.none;
     setState(() {
       _sandboxActive = origin == FilterApplyOrigin.sandbox;
+      _nativeOverlayActive = active;
       if (!active || origin == FilterApplyOrigin.sandbox) {
         _activeEffectName = null;
       } else {
@@ -1159,6 +1163,7 @@ class _ConsolePanelState extends State<ConsolePanel> {
                 icon: Icons.access_time,
                 label: '时钟',
                 enabled: widget.clockComponent.enabled,
+                nativeOverlayActive: _nativeOverlayActive,
                 onToggle: () {
                   setState(() {
                     widget.clockComponent.enabled =
@@ -1173,6 +1178,7 @@ class _ConsolePanelState extends State<ConsolePanel> {
                 icon: Icons.text_fields,
                 label: '标语',
                 enabled: widget.sloganComponent.enabled,
+                nativeOverlayActive: _nativeOverlayActive,
                 onToggle: () {
                   setState(() {
                     widget.sloganComponent.enabled =
@@ -1187,6 +1193,7 @@ class _ConsolePanelState extends State<ConsolePanel> {
                 icon: Icons.image,
                 label: '水印',
                 enabled: widget.watermarkComponent.enabled,
+                nativeOverlayActive: _nativeOverlayActive,
                 onToggle: () {
                   setState(() {
                     widget.watermarkComponent.enabled =
@@ -1238,19 +1245,33 @@ class _ConsolePanelState extends State<ConsolePanel> {
     required IconData icon,
     required String label,
     required bool enabled,
+    required bool nativeOverlayActive,
     required VoidCallback onToggle,
     required VoidCallback onSettings,
   }) {
+    final effectiveEnabled = shouldShowOverlayComponentControlActiveState(
+      componentEnabled: enabled,
+      nativeOverlayActive: nativeOverlayActive,
+    );
+    final allowInteraction = shouldAllowOverlayComponentControl(
+      nativeOverlayActive: nativeOverlayActive,
+    );
+    final effectiveToggle = allowInteraction ? onToggle : null;
+    final effectiveSettings = allowInteraction ? onSettings : null;
     return Expanded(
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: enabled ? const Color(0x143B82F6) : const Color(0xFFFAFAFB),
+          color: effectiveEnabled
+              ? const Color(0x143B82F6)
+              : const Color(0xFFFAFAFB),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: enabled ? const Color(0xFF3B82F6) : const Color(0xFFE5E7EB),
-            width: enabled ? 2 : 1,
+            color: effectiveEnabled
+                ? const Color(0xFF3B82F6)
+                : const Color(0xFFE5E7EB),
+            width: effectiveEnabled ? 2 : 1,
           ),
         ),
         child: Column(
@@ -1260,27 +1281,27 @@ class _ConsolePanelState extends State<ConsolePanel> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 GestureDetector(
-                  onTap: onToggle,
+                  onTap: effectiveToggle,
                   child: Icon(
                     icon,
                     size: 22,
-                    color: enabled
+                    color: effectiveEnabled
                         ? const Color(0xFF3B82F6)
-                        : const Color(0xFF6B7280),
+                        : const Color(0xFF9CA3AF),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    onTap: onSettings,
+                    onTap: effectiveSettings,
                     borderRadius: BorderRadius.circular(12),
                     child: Padding(
                       padding: const EdgeInsets.all(4),
                       child: Icon(
                         Icons.settings,
                         size: 20,
-                        color: enabled
+                        color: effectiveEnabled
                             ? const Color(0xFF3B82F6)
                             : const Color(0xFF9CA3AF),
                       ),
@@ -1291,15 +1312,17 @@ class _ConsolePanelState extends State<ConsolePanel> {
             ),
             const SizedBox(height: 4),
             GestureDetector(
-              onTap: onToggle,
+              onTap: effectiveToggle,
               child: Text(
                 label,
                 style: TextStyle(
                   fontSize: 11,
-                  fontWeight: enabled ? FontWeight.w700 : FontWeight.w500,
-                  color: enabled
+                  fontWeight: effectiveEnabled
+                      ? FontWeight.w700
+                      : FontWeight.w500,
+                  color: effectiveEnabled
                       ? const Color(0xFF3B82F6)
-                      : const Color(0xFF4B5563),
+                      : const Color(0xFF9CA3AF),
                 ),
               ),
             ),

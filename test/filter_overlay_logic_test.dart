@@ -152,6 +152,39 @@ void main() {
     );
   });
 
+  test('native overlay suppresses top-layer components and controls', () {
+    expect(
+      shouldRenderTopLayerComponents(nativeOverlayActive: true),
+      isFalse,
+    );
+    expect(
+      shouldRenderTopLayerComponents(nativeOverlayActive: false),
+      isTrue,
+    );
+    expect(
+      shouldShowOverlayComponentControlActiveState(
+        componentEnabled: true,
+        nativeOverlayActive: true,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldShowOverlayComponentControlActiveState(
+        componentEnabled: true,
+        nativeOverlayActive: false,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldAllowOverlayComponentControl(nativeOverlayActive: true),
+      isFalse,
+    );
+    expect(
+      shouldAllowOverlayComponentControl(nativeOverlayActive: false),
+      isTrue,
+    );
+  });
+
   test('paints base shader only when loaded, active, and not sandboxed', () {
     expect(
       shouldPaintBaseShader(

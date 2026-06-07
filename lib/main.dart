@@ -346,6 +346,8 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
       _alpha.abs() > 0.001 || _brightness.abs() > 0.001;
   bool get _filterEnabled =>
       _baseFilterEnabled || _shaderFilterService.mode != FilterApplyMode.none;
+  bool get _nativeOverlayActive =>
+      _shaderFilterService.mode != FilterApplyMode.none;
 
   TrayMenuState get _trayMenuState => TrayMenuState(
     panelOpen: _isPanelOpen,
@@ -1069,40 +1071,43 @@ class _FilterOverlayPageState extends State<FilterOverlayPage> {
               devicePixelRatio: dpr,
             ),
           ),
-          // 顶层组件（面板关闭时不可交互）
-          Positioned.fill(
-            child: IgnorePointer(
-              ignoring: !_isPanelOpen,
-              child: Stack(
-                children: [
-                  ClockOverlay(
-                    component: _clockComponent,
-                    draggable: _isPanelOpen,
-                    onPositionChanged: (pos) {
-                      setState(() => _clockComponent.position = pos);
-                      _scheduleOverlayComponentPersist(_clockComponent);
-                    },
-                  ),
-                  SloganOverlay(
-                    component: _sloganComponent,
-                    draggable: _isPanelOpen,
-                    onPositionChanged: (pos) {
-                      setState(() => _sloganComponent.position = pos);
-                      _scheduleOverlayComponentPersist(_sloganComponent);
-                    },
-                  ),
-                  WatermarkOverlay(
-                    component: _watermarkComponent,
-                    draggable: _isPanelOpen,
-                    onPositionChanged: (pos) {
-                      setState(() => _watermarkComponent.position = pos);
-                      _scheduleOverlayComponentPersist(_watermarkComponent);
-                    },
-                  ),
-                ],
+           // 顶层组件（面板关闭时不可交互）
+          if (shouldRenderTopLayerComponents(
+            nativeOverlayActive: _nativeOverlayActive,
+          ))
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: !_isPanelOpen,
+                child: Stack(
+                  children: [
+                    ClockOverlay(
+                      component: _clockComponent,
+                      draggable: _isPanelOpen,
+                      onPositionChanged: (pos) {
+                        setState(() => _clockComponent.position = pos);
+                        _scheduleOverlayComponentPersist(_clockComponent);
+                      },
+                    ),
+                    SloganOverlay(
+                      component: _sloganComponent,
+                      draggable: _isPanelOpen,
+                      onPositionChanged: (pos) {
+                        setState(() => _sloganComponent.position = pos);
+                        _scheduleOverlayComponentPersist(_sloganComponent);
+                      },
+                    ),
+                    WatermarkOverlay(
+                      component: _watermarkComponent,
+                      draggable: _isPanelOpen,
+                      onPositionChanged: (pos) {
+                        setState(() => _watermarkComponent.position = pos);
+                        _scheduleOverlayComponentPersist(_watermarkComponent);
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
           if (shouldRenderPanel(
             panelOpen: _isPanelOpen,
             nativeRestoreStartupPending: _nativeRestorePendingOnStartup,
