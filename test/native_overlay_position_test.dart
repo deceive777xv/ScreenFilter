@@ -77,6 +77,23 @@ void main() {
     expect(createWindowBody, contains('WDA_EXCLUDEFROMCAPTURE'));
   });
 
+  test('native screen capture excludes the Flutter host window', () {
+    final source = File(
+      'native/dx11_shader_engine/src/shader_engine.cpp',
+    ).readAsStringSync();
+    final captureBody = _extractFunctionBody(source, 'CaptureScreenFrame');
+    final excludeBody = _extractFunctionBody(
+      source,
+      'EnsureFlutterWindowExcludedFromCapture',
+    );
+
+    expect(source, contains('g_captureExcludedFlutterWindow'));
+    expect(captureBody, contains('EnsureFlutterWindowExcludedFromCapture'));
+    expect(excludeBody, contains('FindFlutterWindowCached'));
+    expect(excludeBody, contains('SetWindowDisplayAffinity'));
+    expect(excludeBody, contains('WDA_EXCLUDEFROMCAPTURE'));
+  });
+
   test('native preview rendering uses resources separate from fullscreen', () {
     final source = File(
       'native/dx11_shader_engine/src/shader_engine.cpp',
@@ -117,13 +134,23 @@ void main() {
 }
 
 String _extractFunctionBody(String source, String functionName) {
-  final start = source.indexOf(functionName);
-  if (start < 0) {
-    fail('Could not find $functionName');
-  }
-  final openBrace = source.indexOf('{', start);
-  if (openBrace < 0) {
-    fail('Could not find $functionName body');
+  var start = -1;
+  var openBrace = -1;
+  var searchFrom = 0;
+  while (true) {
+    start = source.indexOf(functionName, searchFrom);
+    if (start < 0) {
+      fail('Could not find $functionName');
+    }
+    openBrace = source.indexOf('{', start);
+    if (openBrace < 0) {
+      fail('Could not find $functionName body');
+    }
+    final semicolon = source.indexOf(';', start);
+    if (semicolon < 0 || openBrace < semicolon) {
+      break;
+    }
+    searchFrom = start + functionName.length;
   }
 
   var depth = 0;

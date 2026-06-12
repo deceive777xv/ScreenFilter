@@ -17,6 +17,9 @@
 #ifndef WDA_EXCLUDEFROMCAPTURE
 #define WDA_EXCLUDEFROMCAPTURE 0x00000011
 #endif
+#ifndef WDA_NONE
+#define WDA_NONE 0x00000000
+#endif
 
 // ── Internal state ──────────────────────────────────────────────────────────
 static ID3D11Device*           g_device       = nullptr;
@@ -85,6 +88,7 @@ static int                     g_overlayWindowHeight = 0;
 static bool                    g_overlayPlacedBehindFlutter = false;
 static HWND                    g_overlayRelativeFlutterWindow = nullptr;
 static HWND                    g_cachedFlutterWindow = nullptr;
+static HWND                    g_captureExcludedFlutterWindow = nullptr;
 static ULONGLONG               g_lastFlutterWindowSearchTick = 0;
 static ULONGLONG               g_lastOverlayPositionTick = 0;
 static float                   g_filterOpacity = 1.0f;
@@ -161,6 +165,8 @@ static void CopyErrorMessage(
     char* errorBuf,
     int32_t errorBufSize
 );
+static void EnsureFlutterWindowExcludedFromCapture(bool force);
+static void ClearFlutterWindowCaptureExclusion();
 
 // ── Full-screen triangle vertex shader (compiled at init) ──────────────────
 static const char* kVertexShaderCode = R"(
@@ -396,6 +402,7 @@ static void ReleaseScreenFrameResources() {
 static void ReleaseScreenCaptureResources() {
     SafeRelease(g_outputDuplication);
     ReleaseScreenFrameResources();
+    ClearFlutterWindowCaptureExclusion();
 }
 
 static void ReleaseMaskResources() {
@@ -534,6 +541,7 @@ static bool EnsureScreenFrameTexture(const D3D11_TEXTURE2D_DESC& srcDesc) {
 
 static bool CaptureScreenFrame() {
     if (!g_context) return false;
+    EnsureFlutterWindowExcludedFromCapture(false);
     if (!EnsureOutputDuplication()) {
         return g_screenSrv != nullptr;
     }
@@ -794,6 +802,23 @@ static HWND FindFlutterWindowCached(bool force) {
     g_lastFlutterWindowSearchTick = now;
     g_cachedFlutterWindow = FindFlutterWindow();
     return g_cachedFlutterWindow;
+}
+
+static void EnsureFlutterWindowExcludedFromCapture(bool force) {
+    HWND flutterWindow = FindFlutterWindowCached(force);
+    if (!flutterWindow) return;
+    if (!force && g_captureExcludedFlutterWindow == flutterWindow) return;
+    if (SetWindowDisplayAffinity(flutterWindow, WDA_EXCLUDEFROMCAPTURE)) {
+        g_captureExcludedFlutterWindow = flutterWindow;
+    }
+}
+
+static void ClearFlutterWindowCaptureExclusion() {
+    if (!g_captureExcludedFlutterWindow) return;
+    if (IsWindow(g_captureExcludedFlutterWindow)) {
+        SetWindowDisplayAffinity(g_captureExcludedFlutterWindow, WDA_NONE);
+    }
+    g_captureExcludedFlutterWindow = nullptr;
 }
 
 static void PositionOverlayWindow(
