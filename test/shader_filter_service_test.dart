@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -10,6 +11,36 @@ import 'package:screen_filter_app/services/shader_filter_service.dart';
 import 'package:screen_filter_app/ui/sandbox/shader_sandbox_page.dart';
 
 void main() {
+  test('sandbox preview hover does not rebuild for every mouse event', () {
+    final source = File(
+      'lib/ui/sandbox/shader_sandbox_page.dart',
+    ).readAsStringSync();
+    final hoverHandler = _sourceSection(
+      source,
+      'onHover: (event) {',
+      'child: Container(',
+    );
+
+    expect(hoverHandler, contains('_mousePosition ='));
+    expect(hoverHandler, isNot(contains('setState')));
+  });
+
+  test('sandbox preview image decode is coalesced to the latest frame', () {
+    final source = File(
+      'lib/ui/sandbox/shader_sandbox_page.dart',
+    ).readAsStringSync();
+    final renderPreview = _sourceSection(
+      source,
+      'void _renderPreview() {',
+      'void _renderFilterFrame() {',
+    );
+
+    expect(source, contains('bool _previewDecodeInFlight'));
+    expect(source, contains('Uint8List? _pendingPreviewPixels'));
+    expect(renderPreview, contains('_queuePreviewImage(pixels)'));
+    expect(renderPreview, isNot(contains('_createPreviewImage(pixels')));
+  });
+
   test('uses physical pixels for fullscreen shader filter rendering', () {
     final service = ShaderFilterService();
 
@@ -332,6 +363,14 @@ void main() {
 }
 
 Uint8List _solidRgbaPixel(int alpha) => Uint8List.fromList([255, 0, 0, alpha]);
+
+String _sourceSection(String source, String start, String end) {
+  final startIndex = source.indexOf(start);
+  expect(startIndex, greaterThanOrEqualTo(0), reason: 'Missing $start');
+  final endIndex = source.indexOf(end, startIndex);
+  expect(endIndex, greaterThanOrEqualTo(0), reason: 'Missing $end');
+  return source.substring(startIndex, endIndex);
+}
 
 Future<ui.Image> _waitForFilterImage(
   WidgetTester tester,

@@ -48,6 +48,8 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
 
   // ── Preview state ──────────────────────────────────────────────
   ui.Image? _previewImage;
+  bool _previewDecodeInFlight = false;
+  Uint8List? _pendingPreviewPixels;
   static const int _previewWidth = 320;
   static const int _previewHeight = 180;
 
@@ -93,6 +95,8 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     _timer?.cancel();
     _compileDebounce?.cancel();
     _stopwatch.stop();
+    _pendingPreviewPixels = null;
+    _previewDecodeInFlight = false;
     _previewImage?.dispose();
     _previewImage = null;
     // Don't dispose the engine — service owns it.
@@ -161,7 +165,7 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     );
 
     if (pixels != null) {
-      _createPreviewImage(pixels, _previewWidth, _previewHeight);
+      _queuePreviewImage(pixels);
     }
 
     // 2) If filter is active (dynamic), also render at screen res.
@@ -183,7 +187,44 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     );
   }
 
-  Future<void> _createPreviewImage(Uint8List pixels, int w, int h) async {
+  void _queuePreviewImage(Uint8List pixels) {
+    if (_previewDecodeInFlight) {
+      _pendingPreviewPixels = pixels;
+      return;
+    }
+
+    _previewDecodeInFlight = true;
+    unawaited(_drainPreviewImageQueue(pixels));
+  }
+
+  Future<void> _drainPreviewImageQueue(Uint8List pixels) async {
+    var pixelsToDecode = pixels;
+    while (true) {
+      final image = await _decodePreviewImage(
+        pixelsToDecode,
+        _previewWidth,
+        _previewHeight,
+      );
+      if (!mounted) {
+        image.dispose();
+        _pendingPreviewPixels = null;
+        _previewDecodeInFlight = false;
+        return;
+      }
+
+      _replacePreviewImage(image);
+      final pendingPixels = _pendingPreviewPixels;
+      if (pendingPixels == null) {
+        _previewDecodeInFlight = false;
+        return;
+      }
+
+      _pendingPreviewPixels = null;
+      pixelsToDecode = pendingPixels;
+    }
+  }
+
+  Future<ui.Image> _decodePreviewImage(Uint8List pixels, int w, int h) {
     final completer = Completer<ui.Image>();
     ui.decodeImageFromPixels(
       pixels,
@@ -192,12 +233,7 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
       ui.PixelFormat.rgba8888,
       (image) => completer.complete(image),
     );
-    final image = await completer.future;
-    if (mounted) {
-      _replacePreviewImage(image);
-    } else {
-      image.dispose();
-    }
+    return completer.future;
   }
 
   Future<void> _createFilterImage(Uint8List pixels, int w, int h) async {
@@ -746,12 +782,12 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
               ),
               child: MouseRegion(
                 onHover: (event) {
-                  setState(() {
-                    _mousePosition = Offset(
-                      (event.localPosition.dx / 260).clamp(0, 1),
-                      (event.localPosition.dy / 146).clamp(0, 1),
-                    );
-                  });
+                  final nextMousePosition = Offset(
+                    (event.localPosition.dx / 260).clamp(0.0, 1.0).toDouble(),
+                    (event.localPosition.dy / 146).clamp(0.0, 1.0).toDouble(),
+                  );
+                  if (_mousePosition == nextMousePosition) return;
+                  _mousePosition = nextMousePosition;
                 },
                 child: Container(
                   width: 260,

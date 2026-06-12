@@ -27,11 +27,24 @@ static ID3D11Texture2D*        g_renderTarget = nullptr;
 static ID3D11RenderTargetView* g_rtv          = nullptr;
 static ID3D11ShaderResourceView* g_renderSrv  = nullptr;
 static ID3D11Texture2D*        g_staging      = nullptr;
+static ID3D11Texture2D*        g_previewRenderTarget = nullptr;
+static ID3D11RenderTargetView* g_previewRtv   = nullptr;
+static ID3D11Texture2D*        g_previewStaging = nullptr;
 static ID3D11Texture2D*        g_maskTexture  = nullptr;
 static ID3D11ShaderResourceView* g_maskSrv    = nullptr;
 static int32_t                 g_rtWidth      = 0;
 static int32_t                 g_rtHeight     = 0;
+static int32_t                 g_previewRtWidth = 0;
+static int32_t                 g_previewRtHeight = 0;
 static std::mutex              g_mutex;
+
+enum class FrameReadbackKind {
+    None,
+    Fullscreen,
+    Preview,
+};
+
+static FrameReadbackKind       g_lastFrameReadbackKind = FrameReadbackKind::None;
 
 static HWND                    g_overlayWindow = nullptr;
 static IDCompositionDevice*    g_dcompDevice   = nullptr;
@@ -313,6 +326,42 @@ static bool CreateRenderTarget(int32_t w, int32_t h) {
 
     g_rtWidth  = w;
     g_rtHeight = h;
+    return true;
+}
+
+static bool CreatePreviewRenderTarget(int32_t w, int32_t h) {
+    SafeRelease(g_previewRtv);
+    SafeRelease(g_previewRenderTarget);
+    SafeRelease(g_previewStaging);
+
+    D3D11_TEXTURE2D_DESC desc = {};
+    desc.Width = w;
+    desc.Height = h;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_RENDER_TARGET;
+
+    HRESULT hr = g_device->CreateTexture2D(
+        &desc, nullptr, &g_previewRenderTarget
+    );
+    if (FAILED(hr)) return false;
+
+    hr = g_device->CreateRenderTargetView(
+        g_previewRenderTarget, nullptr, &g_previewRtv
+    );
+    if (FAILED(hr)) return false;
+
+    desc.Usage = D3D11_USAGE_STAGING;
+    desc.BindFlags = 0;
+    desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    hr = g_device->CreateTexture2D(&desc, nullptr, &g_previewStaging);
+    if (FAILED(hr)) return false;
+
+    g_previewRtWidth = w;
+    g_previewRtHeight = h;
     return true;
 }
 
@@ -1481,7 +1530,11 @@ SHADER_API int32_t engine_render_frame(int32_t width, int32_t height) {
             return -1;
     }
 
-    return RenderUserShaderToTarget(g_pixelShader, width, height, g_rtv) ? 0 : -1;
+    const bool ok = RenderUserShaderToTarget(g_pixelShader, width, height, g_rtv);
+    if (ok) {
+        g_lastFrameReadbackKind = FrameReadbackKind::Fullscreen;
+    }
+    return ok ? 0 : -1;
 }
 
 SHADER_API int32_t engine_render_preview_frame(int32_t width, int32_t height) {
@@ -1489,13 +1542,18 @@ SHADER_API int32_t engine_render_preview_frame(int32_t width, int32_t height) {
     if (!g_device || !g_context || !g_previewPixelShader || !g_vertexShader)
         return -1;
 
-    // Recreate render target if size changed
-    if (width != g_rtWidth || height != g_rtHeight) {
-        if (!CreateRenderTarget(width, height))
+    if (width != g_previewRtWidth || height != g_previewRtHeight) {
+        if (!CreatePreviewRenderTarget(width, height))
             return -1;
     }
 
-    return RenderUserShaderToTarget(g_previewPixelShader, width, height, g_rtv) ? 0 : -1;
+    const bool ok = RenderUserShaderToTarget(
+        g_previewPixelShader, width, height, g_previewRtv
+    );
+    if (ok) {
+        g_lastFrameReadbackKind = FrameReadbackKind::Preview;
+    }
+    return ok ? 0 : -1;
 }
 
 SHADER_API int32_t engine_show_overlay(int32_t width, int32_t height) {
@@ -1530,6 +1588,7 @@ SHADER_API int32_t engine_render_overlay_frame(int32_t width, int32_t height) {
         if (!RenderUserShaderToTarget(g_pixelShader, width, height, g_rtv))
             return -1;
     }
+    g_lastFrameReadbackKind = FrameReadbackKind::Fullscreen;
 
     return RenderCompositeToOverlay(width, height) ? 0 : -1;
 }
@@ -1646,27 +1705,48 @@ SHADER_API int32_t engine_set_region_mask(
 
 SHADER_API int32_t engine_get_frame_pixels(uint8_t* out_pixels, int32_t buffer_size) {
     std::lock_guard<std::mutex> lock(g_mutex);
-    if (!g_context || !g_renderTarget || !g_staging) return -1;
+    if (!g_context) return -1;
 
-    int32_t expected = g_rtWidth * g_rtHeight * 4;
+    ID3D11Texture2D* source = nullptr;
+    ID3D11Texture2D* staging = nullptr;
+    int32_t width = 0;
+    int32_t height = 0;
+
+    if (g_lastFrameReadbackKind == FrameReadbackKind::Preview) {
+        source = g_previewRenderTarget;
+        staging = g_previewStaging;
+        width = g_previewRtWidth;
+        height = g_previewRtHeight;
+    } else if (g_lastFrameReadbackKind == FrameReadbackKind::Fullscreen) {
+        source = g_renderTarget;
+        staging = g_staging;
+        width = g_rtWidth;
+        height = g_rtHeight;
+    } else {
+        return -1;
+    }
+
+    if (!source || !staging || width <= 0 || height <= 0) return -1;
+
+    int32_t expected = width * height * 4;
     if (buffer_size < expected) return -1;
 
-    g_context->CopyResource(g_staging, g_renderTarget);
+    g_context->CopyResource(staging, source);
 
     D3D11_MAPPED_SUBRESOURCE mapped;
-    HRESULT hr = g_context->Map(g_staging, 0, D3D11_MAP_READ, 0, &mapped);
+    HRESULT hr = g_context->Map(staging, 0, D3D11_MAP_READ, 0, &mapped);
     if (FAILED(hr)) return -1;
 
     const uint8_t* src = static_cast<const uint8_t*>(mapped.pData);
-    for (int32_t y = 0; y < g_rtHeight; y++) {
+    for (int32_t y = 0; y < height; y++) {
         memcpy(
-            out_pixels + y * g_rtWidth * 4,
+            out_pixels + y * width * 4,
             src + y * mapped.RowPitch,
-            g_rtWidth * 4
+            width * 4
         );
     }
 
-    g_context->Unmap(g_staging, 0);
+    g_context->Unmap(staging, 0);
     return 0;
 }
 
@@ -1691,10 +1771,16 @@ SHADER_API void engine_shutdown() {
     SafeRelease(g_renderSrv);
     SafeRelease(g_renderTarget);
     SafeRelease(g_staging);
+    SafeRelease(g_previewRtv);
+    SafeRelease(g_previewRenderTarget);
+    SafeRelease(g_previewStaging);
     SafeRelease(g_context);
     SafeRelease(g_device);
     g_rtWidth  = 0;
     g_rtHeight = 0;
+    g_previewRtWidth = 0;
+    g_previewRtHeight = 0;
+    g_lastFrameReadbackKind = FrameReadbackKind::None;
     g_postProcessEffect = 0;
     g_postProcessIntensity = 24.0f;
 }

@@ -62,6 +62,44 @@ void main() {
     );
     expect(releaseBody, contains('g_overlayHasPresentedFrame = false'));
   });
+
+  test('native preview rendering uses resources separate from fullscreen', () {
+    final source = File(
+      'native/dx11_shader_engine/src/shader_engine.cpp',
+    ).readAsStringSync();
+    final fullscreenBody = _extractFunctionBody(source, 'engine_render_frame');
+    final previewBody = _extractFunctionBody(
+      source,
+      'engine_render_preview_frame',
+    );
+    final overlayBody = _extractFunctionBody(
+      source,
+      'engine_render_overlay_frame',
+    );
+    final pixelReadbackBody = _extractFunctionBody(
+      source,
+      'engine_get_frame_pixels',
+    );
+
+    expect(source, contains('g_previewRenderTarget'));
+    expect(source, contains('g_previewRtv'));
+    expect(source, contains('g_previewStaging'));
+    expect(source, contains('g_previewRtWidth'));
+    expect(source, contains('CreatePreviewRenderTarget'));
+    expect(source, contains('g_lastFrameReadbackKind'));
+
+    expect(fullscreenBody, contains('CreateRenderTarget'));
+    expect(fullscreenBody, contains('g_rtv'));
+    expect(previewBody, contains('CreatePreviewRenderTarget'));
+    expect(previewBody, contains('g_previewRtv'));
+    expect(previewBody, isNot(contains('CreateRenderTarget(width, height)')));
+    expect(previewBody, isNot(contains('g_rtv')));
+    expect(overlayBody, contains('CreateRenderTarget'));
+    expect(overlayBody, contains('g_rtv'));
+    expect(pixelReadbackBody, contains('g_lastFrameReadbackKind'));
+    expect(pixelReadbackBody, contains('g_previewRenderTarget'));
+    expect(pixelReadbackBody, contains('g_renderTarget'));
+  });
 }
 
 String _extractFunctionBody(String source, String functionName) {

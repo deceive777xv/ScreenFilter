@@ -17,29 +17,12 @@ __pycache__/
 *.pyc
 
 .github/
+.codegraph/
 android/
 ios/
 linux/
 macos/
 web/
-test/*
-!test/
-!test/shader_filter_service_test.dart
-!test/settings_service_test.dart
-!test/tray_menu_layout_test.dart
-!test/win32_polling_service_test.dart
-!test/debounced_action_test.dart
-!test/filter_overlay_logic_test.dart
-!test/config_import_notifier_test.dart
-!test/automation_preset_controller_test.dart
-!test/numeric_value_field_test.dart
-!test/advanced_page_test.dart
-!test/console_hotkey_service_test.dart
-!test/console_panel_screen_effect_test.dart
-!test/filter_preset_test.dart
-!test/native_overlay_position_test.dart
-!test/native_shader_sandbox_test.dart
-!test/settings_service_test.dart
 img_temp/
 script.ps1
 
