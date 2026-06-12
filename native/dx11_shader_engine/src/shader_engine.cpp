@@ -8,6 +8,7 @@
 #include <dxgi1_2.h>
 #include <algorithm>
 #include <cmath>
+#include <cctype>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -40,17 +41,24 @@ static IDXGISwapChain1*        g_overlaySwapChain = nullptr;
 static ID3D11RenderTargetView* g_overlayRtv    = nullptr;
 static ID3D11PixelShader*      g_compositeShader = nullptr;
 static ID3D11PixelShader*      g_mosaicShader  = nullptr;
+static ID3D11PixelShader*      g_downsampleShader = nullptr;
 static ID3D11SamplerState*     g_sampler       = nullptr;
 static ID3D11Buffer*           g_overlayCbuffer = nullptr;
 static ID3D11Buffer*           g_postProcessCbuffer = nullptr;
+static ID3D11Buffer*           g_screenTextureCbuffer = nullptr;
 static IDXGIOutputDuplication* g_outputDuplication = nullptr;
 static ID3D11Texture2D*        g_screenTexture = nullptr;
 static ID3D11ShaderResourceView* g_screenSrv   = nullptr;
+static ID3D11Texture2D*        g_sandboxScreenTexture = nullptr;
+static ID3D11RenderTargetView* g_sandboxScreenRtv = nullptr;
+static ID3D11ShaderResourceView* g_sandboxScreenSrv = nullptr;
 static int32_t                 g_overlayWidth  = 0;
 static int32_t                 g_overlayHeight = 0;
 static int32_t                 g_screenWidth   = 0;
 static int32_t                 g_screenHeight  = 0;
 static DXGI_FORMAT             g_screenFormat  = DXGI_FORMAT_UNKNOWN;
+static int32_t                 g_sandboxScreenWidth = 0;
+static int32_t                 g_sandboxScreenHeight = 0;
 static bool                    g_overlayBoundsValid = false;
 static bool                    g_overlayHasPresentedFrame = false;
 static int                     g_overlayX      = 0;
@@ -70,6 +78,9 @@ static bool                    g_maskEnabled  = false;
 static bool                    g_maskInverted = false;
 static int32_t                 g_maskWidth    = 0;
 static int32_t                 g_maskHeight   = 0;
+static constexpr int32_t kMaxSandboxScreenTextureWidth = 960;
+static constexpr int32_t kMaxSandboxScreenTextureHeight = 540;
+static constexpr float kMaxScreenSampleRadiusPx = 32.0f;
 static constexpr const wchar_t* kOverlayWindowClassName =
     L"SCREEN_FILTER_DX11_OVERLAY_WINDOW";
 static constexpr ULONGLONG kFlutterWindowSearchIntervalMs = 2000;
@@ -103,12 +114,35 @@ struct alignas(16) PostProcessUniforms {
 
 static PostProcessUniforms g_postProcessUniforms = {24.0f, {1.0f, 1.0f}, 0.0f};
 
+struct alignas(16) ScreenTextureUniforms {
+    float u_ScreenTextureSize[2];
+    float u_ScreenTexelSize[2];
+    float u_MaxScreenSampleRadius;
+    float _pad0[3];
+};
+
+static ScreenTextureUniforms g_screenTextureUniforms = {
+    {1.0f, 1.0f},
+    {1.0f, 1.0f},
+    kMaxScreenSampleRadiusPx,
+    {0.0f, 0.0f, 0.0f},
+};
+
 static int32_t CompileShaderToSlot(
     const char* hlsl_code,
     int32_t code_length,
     char* error_buf,
     int32_t error_buf_size,
     ID3D11PixelShader*& shaderSlot
+);
+static bool ValidateUserShaderSandbox(
+    const std::string& userCode,
+    std::string& errorMessage
+);
+static void CopyErrorMessage(
+    const char* message,
+    char* errorBuf,
+    int32_t errorBufSize
 );
 
 // ── Full-screen triangle vertex shader (compiled at init) ──────────────────
@@ -199,6 +233,45 @@ float4 main(PS_INPUT input) : SV_TARGET {
 }
 )";
 
+static const char* kScreenDownsampleShaderCode = R"(
+Texture2D screenFrame : register(t0);
+SamplerState frameSampler : register(s0);
+
+struct PS_INPUT {
+    float4 pos : SV_POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+float4 main(PS_INPUT input) : SV_TARGET {
+    return screenFrame.Sample(frameSampler, input.uv);
+}
+)";
+
+static const char* kScreenTextureSandboxHeader = R"(
+#ifndef SCREENFILTER_SCREEN_TEXTURE_SANDBOX
+#define SCREENFILTER_SCREEN_TEXTURE_SANDBOX
+cbuffer ScreenTextureSandbox : register(b3) {
+    float2 u_ScreenTextureSize;
+    float2 u_ScreenTexelSize;
+    float  u_MaxScreenSampleRadius;
+    float3 _screenTexturePad0;
+};
+
+Texture2D screenTexture : register(t0);
+SamplerState screenSampler : register(s0);
+
+float4 SampleScreen(float2 uv, float2 offsetPx) {
+    float2 safeOffsetPx = clamp(offsetPx,
+        -u_MaxScreenSampleRadius.xx,
+        u_MaxScreenSampleRadius.xx
+    );
+    float2 sampleUv = saturate(uv + safeOffsetPx * u_ScreenTexelSize);
+    return screenTexture.Sample(screenSampler, sampleUv);
+}
+#endif
+
+)";
+
 // ── Helper: safe release ────────────────────────────────────────────────────
 template<typename T>
 static void SafeRelease(T*& p) {
@@ -250,7 +323,16 @@ static void ReleaseOverlaySwapChain() {
     g_overlayHeight = 0;
 }
 
+static void ReleaseSandboxScreenResources() {
+    SafeRelease(g_sandboxScreenSrv);
+    SafeRelease(g_sandboxScreenRtv);
+    SafeRelease(g_sandboxScreenTexture);
+    g_sandboxScreenWidth = 0;
+    g_sandboxScreenHeight = 0;
+}
+
 static void ReleaseScreenFrameResources() {
+    ReleaseSandboxScreenResources();
     SafeRelease(g_screenSrv);
     SafeRelease(g_screenTexture);
     g_screenWidth = 0;
@@ -439,6 +521,130 @@ static bool CaptureScreenFrame() {
 
     g_outputDuplication->ReleaseFrame();
     return ok && g_screenSrv;
+}
+
+static bool EnsureSandboxScreenTexture(int32_t sourceWidth, int32_t sourceHeight) {
+    if (!g_device || sourceWidth <= 0 || sourceHeight <= 0) return false;
+
+    const float scaleX =
+        static_cast<float>(kMaxSandboxScreenTextureWidth) /
+        static_cast<float>(sourceWidth);
+    const float scaleY =
+        static_cast<float>(kMaxSandboxScreenTextureHeight) /
+        static_cast<float>(sourceHeight);
+    const float scale = (std::min)(1.0f, (std::min)(scaleX, scaleY));
+    const int32_t targetWidth = (std::max)(
+        1,
+        static_cast<int32_t>(std::floor(sourceWidth * scale))
+    );
+    const int32_t targetHeight = (std::max)(
+        1,
+        static_cast<int32_t>(std::floor(sourceHeight * scale))
+    );
+
+    if (g_sandboxScreenTexture &&
+        g_sandboxScreenWidth == targetWidth &&
+        g_sandboxScreenHeight == targetHeight) {
+        return true;
+    }
+
+    ReleaseSandboxScreenResources();
+
+    D3D11_TEXTURE2D_DESC desc = {};
+    desc.Width = targetWidth;
+    desc.Height = targetHeight;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+    HRESULT hr = g_device->CreateTexture2D(
+        &desc, nullptr, &g_sandboxScreenTexture
+    );
+    if (FAILED(hr)) return false;
+
+    hr = g_device->CreateRenderTargetView(
+        g_sandboxScreenTexture, nullptr, &g_sandboxScreenRtv
+    );
+    if (FAILED(hr)) {
+        ReleaseSandboxScreenResources();
+        return false;
+    }
+
+    hr = g_device->CreateShaderResourceView(
+        g_sandboxScreenTexture, nullptr, &g_sandboxScreenSrv
+    );
+    if (FAILED(hr)) {
+        ReleaseSandboxScreenResources();
+        return false;
+    }
+
+    g_sandboxScreenWidth = targetWidth;
+    g_sandboxScreenHeight = targetHeight;
+    return true;
+}
+
+static bool UpdateScreenTextureCbuffer() {
+    if (!g_context || !g_screenTextureCbuffer) return false;
+
+    const float width = static_cast<float>(
+        (std::max)(1, g_sandboxScreenWidth)
+    );
+    const float height = static_cast<float>(
+        (std::max)(1, g_sandboxScreenHeight)
+    );
+    g_screenTextureUniforms.u_ScreenTextureSize[0] = width;
+    g_screenTextureUniforms.u_ScreenTextureSize[1] = height;
+    g_screenTextureUniforms.u_ScreenTexelSize[0] = 1.0f / width;
+    g_screenTextureUniforms.u_ScreenTexelSize[1] = 1.0f / height;
+    g_screenTextureUniforms.u_MaxScreenSampleRadius = kMaxScreenSampleRadiusPx;
+
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    HRESULT hr = g_context->Map(
+        g_screenTextureCbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped
+    );
+    if (FAILED(hr)) return false;
+    memcpy(
+        mapped.pData,
+        &g_screenTextureUniforms,
+        sizeof(ScreenTextureUniforms)
+    );
+    g_context->Unmap(g_screenTextureCbuffer, 0);
+    return true;
+}
+
+static bool PrepareSandboxScreenTexture() {
+    if (!g_context || !g_vertexShader || !g_downsampleShader || !g_sampler) {
+        return false;
+    }
+    if (!CaptureScreenFrame() || !g_screenSrv) {
+        return g_sandboxScreenSrv != nullptr;
+    }
+    if (!EnsureSandboxScreenTexture(g_screenWidth, g_screenHeight)) {
+        return false;
+    }
+
+    ID3D11ShaderResourceView* nullSrv[1] = {nullptr};
+    g_context->PSSetShaderResources(0, 1, nullSrv);
+    g_context->OMSetRenderTargets(1, &g_sandboxScreenRtv, nullptr);
+
+    D3D11_VIEWPORT vp = {};
+    vp.Width = static_cast<float>(g_sandboxScreenWidth);
+    vp.Height = static_cast<float>(g_sandboxScreenHeight);
+    vp.MaxDepth = 1.0f;
+    g_context->RSSetViewports(1, &vp);
+
+    g_context->VSSetShader(g_vertexShader, nullptr, 0);
+    g_context->PSSetShader(g_downsampleShader, nullptr, 0);
+    g_context->PSSetShaderResources(0, 1, &g_screenSrv);
+    g_context->PSSetSamplers(0, 1, &g_sampler);
+    g_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    g_context->Draw(3, 0);
+    g_context->PSSetShaderResources(0, 1, nullSrv);
+
+    return g_sandboxScreenSrv != nullptr;
 }
 
 static void ReleaseOverlayResources() {
@@ -746,7 +952,13 @@ static bool RenderUserShaderToTarget(
     int32_t height,
     ID3D11RenderTargetView* target
 ) {
-    if (!g_context || !pixelShader || !g_vertexShader || !g_cbuffer || !target) {
+    if (!g_context || !pixelShader || !g_vertexShader || !g_cbuffer ||
+        !g_sampler || !g_screenTextureCbuffer || !target) {
+        return false;
+    }
+
+    PrepareSandboxScreenTexture();
+    if (!UpdateScreenTextureCbuffer()) {
         return false;
     }
 
@@ -772,10 +984,15 @@ static bool RenderUserShaderToTarget(
 
     g_context->VSSetShader(g_vertexShader, nullptr, 0);
     g_context->PSSetShader(pixelShader, nullptr, 0);
+    ID3D11ShaderResourceView* screenSrv = g_sandboxScreenSrv;
+    g_context->PSSetShaderResources(0, 1, &screenSrv);
+    g_context->PSSetSamplers(0, 1, &g_sampler);
     g_context->PSSetConstantBuffers(0, 1, &g_cbuffer);
+    g_context->PSSetConstantBuffers(3, 1, &g_screenTextureCbuffer);
     g_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     g_context->Draw(3, 0);
 
+    g_context->PSSetShaderResources(0, 1, nullSrv);
     return true;
 }
 
@@ -960,6 +1177,25 @@ SHADER_API int32_t engine_init() {
     mosaicBlob->Release();
     if (FAILED(hr)) return -1;
 
+    // Compile the screen downsample shader used for user post-processing.
+    ID3DBlob* downsampleBlob = nullptr;
+    ID3DBlob* downsampleError = nullptr;
+    hr = D3DCompile(
+        kScreenDownsampleShaderCode, strlen(kScreenDownsampleShaderCode),
+        "ScreenDownsamplePS", nullptr, nullptr,
+        "main", "ps_5_0", 0, 0,
+        &downsampleBlob, &downsampleError
+    );
+    if (downsampleError) downsampleError->Release();
+    if (FAILED(hr)) return -1;
+
+    hr = g_device->CreatePixelShader(
+        downsampleBlob->GetBufferPointer(), downsampleBlob->GetBufferSize(),
+        nullptr, &g_downsampleShader
+    );
+    downsampleBlob->Release();
+    if (FAILED(hr)) return -1;
+
     // Create constant buffer
     D3D11_BUFFER_DESC cbDesc = {};
     cbDesc.ByteWidth      = sizeof(ShaderUniforms);
@@ -984,6 +1220,16 @@ SHADER_API int32_t engine_init() {
     postProcessCbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     hr = g_device->CreateBuffer(
         &postProcessCbDesc, nullptr, &g_postProcessCbuffer
+    );
+    if (FAILED(hr)) return -1;
+
+    D3D11_BUFFER_DESC screenTextureCbDesc = {};
+    screenTextureCbDesc.ByteWidth = sizeof(ScreenTextureUniforms);
+    screenTextureCbDesc.Usage = D3D11_USAGE_DYNAMIC;
+    screenTextureCbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    screenTextureCbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    hr = g_device->CreateBuffer(
+        &screenTextureCbDesc, nullptr, &g_screenTextureCbuffer
     );
     if (FAILED(hr)) return -1;
 
@@ -1036,6 +1282,113 @@ SHADER_API int32_t engine_compile_preview_shader(
     );
 }
 
+static std::string StripHlslComments(const std::string& code) {
+    std::string out;
+    out.reserve(code.size());
+    bool inLineComment = false;
+    bool inBlockComment = false;
+
+    for (size_t i = 0; i < code.size(); i++) {
+        const char c = code[i];
+        const char next = i + 1 < code.size() ? code[i + 1] : '\0';
+
+        if (inLineComment) {
+            if (c == '\n' || c == '\r') {
+                inLineComment = false;
+                out.push_back(c);
+            } else {
+                out.push_back(' ');
+            }
+            continue;
+        }
+
+        if (inBlockComment) {
+            if (c == '*' && next == '/') {
+                inBlockComment = false;
+                out.append("  ");
+                i++;
+            } else {
+                out.push_back(c == '\n' || c == '\r' ? c : ' ');
+            }
+            continue;
+        }
+
+        if (c == '/' && next == '/') {
+            inLineComment = true;
+            out.append("  ");
+            i++;
+            continue;
+        }
+        if (c == '/' && next == '*') {
+            inBlockComment = true;
+            out.append("  ");
+            i++;
+            continue;
+        }
+        out.push_back(c);
+    }
+
+    return out;
+}
+
+static std::string ToLowerAscii(std::string text) {
+    std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return text;
+}
+
+static bool ValidateUserShaderSandbox(
+    const std::string& userCode,
+    std::string& errorMessage
+) {
+    const std::string code = ToLowerAscii(StripHlslComments(userCode));
+    const char* forbiddenTokens[] = {
+        "screentexture.",
+        "texture1d",
+        "texture2d",
+        "texture3d",
+        "texturecube",
+        "rwtexture",
+        "samplerstate",
+        "samplercomparisonstate",
+        "register(t",
+        "register(s",
+        ".sample(",
+        ".samplelevel(",
+        ".samplegrad(",
+        ".samplecmp(",
+        ".load(",
+        ".gather",
+    };
+
+    for (const char* token : forbiddenTokens) {
+        if (code.find(token) != std::string::npos) {
+            errorMessage =
+                "Screen texture access is sandboxed. Use "
+                "SampleScreen(uv, offsetPx); do not declare textures, "
+                "samplers, or t*/s* registers in user shaders.";
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static void CopyErrorMessage(
+    const char* message,
+    char* errorBuf,
+    int32_t errorBufSize
+) {
+    if (!errorBuf || errorBufSize <= 0) return;
+    const size_t len = (std::min)(
+        strlen(message),
+        static_cast<size_t>(errorBufSize - 1)
+    );
+    memcpy(errorBuf, message, len);
+    errorBuf[len] = '\0';
+}
+
 static int32_t CompileShaderToSlot(
     const char* hlsl_code,
     int32_t code_length,
@@ -1044,12 +1397,26 @@ static int32_t CompileShaderToSlot(
     ID3D11PixelShader*& shaderSlot
 ) {
     if (error_buf && error_buf_size > 0) error_buf[0] = '\0';
+    if (!hlsl_code || code_length < 0) return -1;
+
+    const std::string userCode(
+        hlsl_code,
+        static_cast<size_t>(code_length)
+    );
+    std::string validationError;
+    if (!ValidateUserShaderSandbox(userCode, validationError)) {
+        CopyErrorMessage(validationError.c_str(), error_buf, error_buf_size);
+        return 1;
+    }
+
+    const std::string compiledCode =
+        std::string(kScreenTextureSandboxHeader) + userCode;
 
     ID3DBlob* psBlob  = nullptr;
     ID3DBlob* psError = nullptr;
 
     HRESULT hr = D3DCompile(
-        hlsl_code, static_cast<SIZE_T>(code_length),
+        compiledCode.c_str(), compiledCode.size(),
         "UserShader", nullptr, nullptr,
         "main", "ps_5_0",
         D3DCOMPILE_ENABLE_STRICTNESS,
@@ -1311,12 +1678,14 @@ SHADER_API void engine_shutdown() {
     SafeRelease(g_previewPixelShader);
     SafeRelease(g_compositeShader);
     SafeRelease(g_mosaicShader);
+    SafeRelease(g_downsampleShader);
     SafeRelease(g_vertexShader);
     SafeRelease(g_inputLayout);
     SafeRelease(g_vertexBuffer);
     SafeRelease(g_cbuffer);
     SafeRelease(g_overlayCbuffer);
     SafeRelease(g_postProcessCbuffer);
+    SafeRelease(g_screenTextureCbuffer);
     SafeRelease(g_sampler);
     SafeRelease(g_rtv);
     SafeRelease(g_renderSrv);

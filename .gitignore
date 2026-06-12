@@ -38,6 +38,7 @@ test/*
 !test/console_panel_screen_effect_test.dart
 !test/filter_preset_test.dart
 !test/native_overlay_position_test.dart
+!test/native_shader_sandbox_test.dart
 !test/settings_service_test.dart
 img_temp/
 script.ps1

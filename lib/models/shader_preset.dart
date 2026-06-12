@@ -30,6 +30,10 @@ class ShaderPreset {
 //   u_Resolution  : float2 - Viewport resolution (width, height)
 //   u_Mouse       : float2 - Mouse position (normalized 0~1)
 //   u_AccentColor : float4 - User accent color (RGBA)
+//
+// Screen sampling helper injected by the native sandbox:
+//   SampleScreen(uv, offsetPx)
+//   offsetPx is clamped by native code before sampling.
 
 cbuffer Uniforms : register(b0) {
     float  u_Time;
@@ -47,18 +51,25 @@ struct PS_INPUT {
 float4 main(PS_INPUT input) : SV_TARGET {
     float2 uv = input.uv;
 
-    // Aspect-correct coordinates centered at origin
+    // Aspect-correct coordinates centered at origin.
     float2 p = (2.0 * uv - 1.0);
     p.x *= u_Resolution.x / u_Resolution.y;
 
-    // Animated color gradient (Shadertoy style)
-    float3 col = 0.5 + 0.5 * cos(u_Time + uv.xyx + float3(0, 2, 4));
+    // A small chromatic offset that stays inside the sandbox sample radius.
+    float wave = sin(u_Time * 1.7 + p.y * 8.0) * 6.0;
+    float2 offsetPx = float2(wave, 0.0);
+    float3 screenR = SampleScreen(uv, offsetPx).rgb;
+    float3 screenG = SampleScreen(uv, float2(0.0, 0.0)).rgb;
+    float3 screenB = SampleScreen(uv, -offsetPx).rgb;
+    float3 screenCol = float3(screenR.r, screenG.g, screenB.b);
 
-    // Mouse influence: radial glow
+    // Mouse influence: radial accent tint.
     float2 m = (2.0 * u_Mouse - 1.0);
     m.x *= u_Resolution.x / u_Resolution.y;
     float d = length(p - m);
-    col += u_AccentColor.rgb * 0.3 * exp(-3.0 * d);
+    float glow = exp(-3.0 * d);
+    float3 tint = lerp(screenCol, u_AccentColor.rgb, 0.24);
+    float3 col = lerp(screenCol, tint, glow);
 
     return float4(col, 1.0);
 }
