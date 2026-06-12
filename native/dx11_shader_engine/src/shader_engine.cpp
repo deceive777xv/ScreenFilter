@@ -14,6 +14,10 @@
 #include <vector>
 #include <mutex>
 
+#ifndef WDA_EXCLUDEFROMCAPTURE
+#define WDA_EXCLUDEFROMCAPTURE 0x00000011
+#endif
+
 // ── Internal state ──────────────────────────────────────────────────────────
 static ID3D11Device*           g_device       = nullptr;
 static ID3D11DeviceContext*    g_context      = nullptr;
@@ -879,6 +883,8 @@ static bool CreateOverlayWindow(int32_t width, int32_t height) {
     );
     if (!g_overlayWindow) return false;
 
+    // Prevent desktop duplication from sampling our previous overlay frame.
+    SetWindowDisplayAffinity(g_overlayWindow, WDA_EXCLUDEFROMCAPTURE);
     SetLayeredWindowAttributes(g_overlayWindow, 0, 255, LWA_ALPHA);
     PositionOverlayWindow(width, height, true, false);
     return true;

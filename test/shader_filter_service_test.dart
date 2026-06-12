@@ -29,16 +29,31 @@ void main() {
     final source = File(
       'lib/ui/sandbox/shader_sandbox_page.dart',
     ).readAsStringSync();
-    final renderPreview = _sourceSection(
-      source,
-      'void _renderPreview() {',
-      'void _renderFilterFrame() {',
-    );
+    final renderPreview = _sourceFunctionBody(source, 'void _renderPreview()');
 
     expect(source, contains('bool _previewDecodeInFlight'));
     expect(source, contains('Uint8List? _pendingPreviewPixels'));
     expect(renderPreview, contains('_queuePreviewImage(pixels)'));
     expect(renderPreview, isNot(contains('_createPreviewImage(pixels')));
+  });
+
+  test('sandbox preview loop does not render fullscreen overlay frames', () {
+    final source = File(
+      'lib/ui/sandbox/shader_sandbox_page.dart',
+    ).readAsStringSync();
+    final renderPreview = _sourceFunctionBody(source, 'void _renderPreview()');
+
+    expect(renderPreview, isNot(contains('_renderFilterFrame')));
+    expect(renderPreview, isNot(contains('renderFullscreenFilterFrame')));
+  });
+
+  test('sandbox leaves dynamic fullscreen rendering on the service timer', () {
+    final source = File(
+      'lib/ui/sandbox/shader_sandbox_page.dart',
+    ).readAsStringSync();
+
+    expect(source, isNot(contains('pauseOwnTimer')));
+    expect(source, isNot(contains('resumeOwnTimerIfNeeded')));
   });
 
   test('uses physical pixels for fullscreen shader filter rendering', () {
@@ -370,6 +385,26 @@ String _sourceSection(String source, String start, String end) {
   final endIndex = source.indexOf(end, startIndex);
   expect(endIndex, greaterThanOrEqualTo(0), reason: 'Missing $end');
   return source.substring(startIndex, endIndex);
+}
+
+String _sourceFunctionBody(String source, String signature) {
+  final startIndex = source.indexOf(signature);
+  expect(startIndex, greaterThanOrEqualTo(0), reason: 'Missing $signature');
+  final openBrace = source.indexOf('{', startIndex);
+  expect(openBrace, greaterThanOrEqualTo(0), reason: 'Missing $signature body');
+
+  var depth = 0;
+  for (var i = openBrace; i < source.length; i++) {
+    final char = source[i];
+    if (char == '{') depth++;
+    if (char == '}') {
+      depth--;
+      if (depth == 0) {
+        return source.substring(openBrace, i + 1);
+      }
+    }
+  }
+  fail('Could not parse $signature body');
 }
 
 Future<ui.Image> _waitForFilterImage(

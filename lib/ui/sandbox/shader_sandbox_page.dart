@@ -71,10 +71,6 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
         : FilterApplyMode.none;
     _accentColor = _service.accentColor;
 
-    if (_filterMode != FilterApplyMode.none) {
-      _service.pauseOwnTimer();
-    }
-
     _compileCurrentShader();
     _startAnimation();
   }
@@ -100,8 +96,6 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     _previewImage?.dispose();
     _previewImage = null;
     // Don't dispose the engine — service owns it.
-    // Let the service resume its own timer if needed.
-    _service.resumeOwnTimerIfNeeded();
     super.dispose();
   }
 
@@ -131,9 +125,6 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
       _accentColor,
       origin: FilterApplyOrigin.sandbox,
     );
-    if (_filterMode == FilterApplyMode.dynamic) {
-      _service.pauseOwnTimer();
-    }
     return true;
   }
 
@@ -167,24 +158,6 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
     if (pixels != null) {
       _queuePreviewImage(pixels);
     }
-
-    // 2) If filter is active (dynamic), also render at screen res.
-    if (_filterMode == FilterApplyMode.dynamic) {
-      _renderFilterFrame();
-    }
-  }
-
-  void _renderFilterFrame() {
-    final screenSize = _service.screenSize;
-    if (screenSize == Size.zero) return;
-
-    final mouse = _service.cachedGlobalMouseNormalized;
-    _service.renderFullscreenFilterFrame(
-      time: _elapsedTime,
-      mouseX: mouse.dx,
-      mouseY: mouse.dy,
-      accentColor: _accentColor,
-    );
   }
 
   void _queuePreviewImage(Uint8List pixels) {
@@ -346,14 +319,14 @@ class _ShaderSandboxPageState extends State<ShaderSandboxPage> {
       return;
     }
 
-    // Dynamic — service knows, but while we're alive we render.
+    // Dynamic fullscreen rendering stays on the service timer; the sandbox
+    // preview loop only renders the local preview.
     _service.applyFilter(
       FilterApplyMode.dynamic,
       screenSize,
       _accentColor,
       origin: FilterApplyOrigin.sandbox,
     );
-    _service.pauseOwnTimer(); // we handle it
   }
 
   // ── Export / Import ────────────────────────────────────────────

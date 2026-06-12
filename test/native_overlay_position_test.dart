@@ -63,6 +63,20 @@ void main() {
     expect(releaseBody, contains('g_overlayHasPresentedFrame = false'));
   });
 
+  test('native overlay is excluded from screen capture feedback', () {
+    final source = File(
+      'native/dx11_shader_engine/src/shader_engine.cpp',
+    ).readAsStringSync();
+    final createWindowBody = _extractFunctionBody(
+      source,
+      'CreateOverlayWindow',
+    );
+
+    expect(source, contains('WDA_EXCLUDEFROMCAPTURE'));
+    expect(createWindowBody, contains('SetWindowDisplayAffinity'));
+    expect(createWindowBody, contains('WDA_EXCLUDEFROMCAPTURE'));
+  });
+
   test('native preview rendering uses resources separate from fullscreen', () {
     final source = File(
       'native/dx11_shader_engine/src/shader_engine.cpp',
