@@ -1,107 +1,150 @@
 # ScreenFilter 技术说明
 
-生成日期：2026-05-31
+更新日期：2026-06-13
 
 ## 1. 项目定位
 
-ScreenFilter 是一个 Windows-only 的桌面屏幕滤镜应用。应用主体使用 Flutter 构建，窗口层通过 `window_manager` 创建全屏、透明、置顶、默认鼠标穿透的覆盖窗口；高性能动态滤镜通过 `native/dx11_shader_engine` 原生 DX11 动态库渲染，并通过 Dart FFI 接入 Flutter。
+ScreenFilter 是一个 Windows-only 的桌面屏幕滤镜应用。应用主体使用 Flutter 构建，窗口层通过 `window_manager` 创建全屏、透明、置顶、默认鼠标穿透的覆盖窗口；动态滤镜和屏幕后处理通过 `native/dx11_shader_engine` 原生 DX11 动态库渲染，并通过 Dart FFI 接入 Flutter。
 
 项目目标是提供一个常驻托盘的屏幕覆盖工具，支持：
 
-- 基础色彩滤镜：颜色、透明度、亮度。
-- 预设滤镜：护眼、夜间、电影、电子书等。
+- 基础色彩滤镜：颜色、透明度、亮度、最近颜色和预设。
 - 顶层组件：时钟、标语、水印。
-- 高级模式：专注模式、聚光灯、区域遮罩、进程自动化。
-- Shader 沙盒与内置屏幕特效：使用 HLSL/DX11 渲染动态效果。
-- 系统托盘快捷控制和配置持久化。
+- 高级模式：专注模式、聚光灯、区域遮罩、进程自动化、全局控制台快捷键。
+- Shader 沙盒：HLSL 编辑、预览、`.shader` 导入导出、静态/动态全屏应用。
+- 屏幕特效：HLSL 叠加效果，以及基于桌面截图纹理的 native 马赛克后处理。
+- 系统托盘快捷控制、配置持久化、配置导入导出和开机启动控制。
 
 当前仓库只维护 Windows 桌面版本。非 Windows 平台目录已从仓库中移除。
 
-## 2. 技术栈
-
-| 层级 | 技术/依赖 | 作用 |
-| --- | --- | --- |
-| Flutter UI | Flutter Material、CustomPaint、FragmentShader | 控制面板、基础滤镜、顶层组件、遮罩编辑 UI |
-| 窗口控制 | `window_manager` | 全屏透明窗口、置顶、隐藏任务栏、鼠标穿透切换 |
-| 系统托盘 | `system_tray` | 托盘图标、右键菜单、面板开关、快捷滤镜控制 |
-| 配置存储 | `shared_preferences` | 基础滤镜、高级配置、组件配置、自动化规则 |
-| 文件选择 | `file_selector` | 配置导入导出、水印图片选择等 |
-| FFI | `dart:ffi`、`ffi` | Dart 调用 `dx11_shader_engine.dll` |
-| Native GPU | Direct3D 11、D3DCompiler、DXGI、DirectComposition | HLSL 编译、GPU 渲染、透明 native overlay |
-| Win32 辅助 | `user32.dll`、`kernel32.dll` FFI | 前台进程识别、鼠标位置、窗口矩形 |
-
-## 3. 目录结构
-
-```text
-lib/
-  main.dart                         应用入口、窗口/托盘/全局状态、覆盖层组合
-  models/
-    advanced_config.dart            专注模式、聚光灯、区域遮罩、自动化、导入导出模型
-    filter_preset.dart              基础滤镜预设
-    overlay_component.dart          时钟/标语/水印组件模型
-    screen_effect.dart              内置 HLSL 屏幕特效
-    shader_preset.dart              Shader 沙盒预设模型
-  services/
-    dx11_shader_ffi.dart            DX11 native DLL 的 Dart FFI 封装
-    settings_service.dart           SharedPreferences 配置服务
-    shader_filter_service.dart      Shader 编译、渲染、native overlay 状态管理
-    tray_menu_layout.dart           托盘菜单的纯数据布局
-    win32_helpers.dart              Win32 前台窗口/进程/鼠标工具
-  ui/
-    console_panel.dart              主控制台面板
-    advanced/advanced_page.dart     高级功能页
-    sandbox/                        Shader 沙盒页面与编辑器
-    overlays/                       时钟、标语、水印、专注、聚光灯、区域遮罩 UI
-
-native/dx11_shader_engine/
-  include/shader_engine.h           C ABI 导出接口
-  src/shader_engine.cpp             DX11 设备、shader 编译、overlay 合成、区域遮罩
-  CMakeLists.txt                    原生 DLL 构建配置
-
-windows/
-  CMakeLists.txt                    Flutter Windows runner 与 native DLL 集成
-  runner/                           Windows runner 工程
-
-shaders/
-  filter.frag                       Flutter 侧基础 Fragment Shader
-
-test/
-  shader_filter_service_test.dart   ShaderFilterService 行为测试
-  tray_menu_layout_test.dart        托盘菜单布局测试
-```
-
-## 4. 运行时整体架构
+## 2. 运行时架构
 
 ```mermaid
 flowchart TD
   A["main()"] --> B["SettingsService.init()"]
   B --> C["windowManager.waitUntilReadyToShow()"]
-  C --> D["FilterOverlayPage"]
-  D --> E["SystemTray"]
-  D --> F["ConsolePanel"]
-  D --> G["Flutter overlay stack"]
-  D --> H["ShaderFilterService"]
-  H --> I["DX11ShaderEngine Dart FFI"]
-  I --> J["dx11_shader_engine.dll"]
-  J --> K["DX11 render target"]
-  J --> L["DirectComposition transparent overlay"]
-  G --> M["基础 Flutter FragmentShader"]
-  G --> N["FocusMode / Spotlight / RegionMask / Widgets"]
+  C --> D["ScreenFilterApp"]
+  D --> E["FilterOverlayPage"]
+  E --> F["SystemTray"]
+  E --> G["ConsolePanel"]
+  E --> H["Win32PollingService"]
+  E --> I["ConsoleHotkeyService"]
+  E --> J["ShaderFilterService"]
+  J --> K["DX11ShaderEngine Dart FFI"]
+  K --> L["dx11_shader_engine.dll"]
+  L --> M["D3D11 render targets"]
+  L --> N["DXGI Output Duplication"]
+  L --> O["DirectComposition transparent overlay"]
+  E --> P["Flutter overlay stack"]
+  P --> Q["filter.frag base shader"]
+  P --> R["Focus / Spotlight / Region mask / Widgets"]
 ```
 
 核心状态集中在 `FilterOverlayPage`：
 
-- 启动时从 `SettingsService` 读取持久化配置。
-- 初始化 `ShaderFilterService`，加载 native DLL 并初始化 DX11 设备。
-- 初始化系统托盘，左键打开/关闭控制面板，右键显示快捷菜单。
-- 加载 `shaders/filter.frag` 作为 Flutter 基础滤镜。
-- 维护基础滤镜、顶层组件、高级功能、自动化规则等全局状态。
+- 启动时从 `SettingsService` 读取基础滤镜、组件、高级配置、自动化规则、快捷键和最近 native 滤镜状态。
+- 初始化 `Win32PollingService`，按需提供鼠标、前台窗口矩形和前台进程名。
+- 初始化 `ShaderFilterService`，加载 native DLL，初始化 DX11 device，并同步透明度、亮度、区域遮罩和后处理状态。
+- 初始化系统托盘，左键打开/关闭控制面板，右键刷新并弹出快捷菜单。
+- 初始化 `ConsoleHotkeyService`，通过 Windows runner 的 MethodChannel 注册或注销 Win32 全局热键。
+- 维护 Flutter 基础滤镜、DX11 native 滤镜、顶层组件、高级功能、自动化和配置导入导出的协作关系。
 
-## 5. 窗口模型与覆盖层结构
+## 3. 技术栈
 
-### 5.1 Windows Flutter 窗口
+| 层级 | 技术/依赖 | 作用 |
+| --- | --- | --- |
+| Flutter UI | Flutter Material、CustomPaint、FragmentShader | 控制台、基础滤镜、组件、遮罩编辑 UI |
+| 窗口控制 | `window_manager` | 全屏透明窗口、置顶、隐藏任务栏、鼠标穿透切换 |
+| 系统托盘 | `system_tray` | 托盘图标、右键菜单、面板/滤镜/聚光灯/快捷键控制 |
+| 配置存储 | `shared_preferences` | 基础滤镜、高级配置、组件配置、自动化规则、最近 native 滤镜状态 |
+| 文件选择 | `file_selector` | 配置导入导出、`.shader` 导入导出、水印图片选择 |
+| FFI | `dart:ffi`、`ffi` | Dart 调用 `dx11_shader_engine.dll` |
+| MethodChannel | Flutter Windows runner | Dart 请求注册全局热键，runner 接收 `WM_HOTKEY` 后回调 Dart |
+| Native GPU | Direct3D 11、D3DCompiler、DXGI、DirectComposition | HLSL 编译、桌面截图采样、GPU 渲染、透明 native overlay |
+| Win32 辅助 | `user32.dll`、`kernel32.dll`、PowerShell | 前台进程识别、鼠标位置、窗口矩形、启动项和字体探测 |
 
-`main.dart` 中通过 `window_manager` 创建窗口：
+## 4. 目录结构
+
+```text
+lib/
+  main.dart                         应用入口、窗口/托盘/全局状态、覆盖层组合
+  models/
+    advanced_config.dart            专注、聚光灯、遮罩、自动化、快捷键、导入导出模型
+    filter_preset.dart              基础滤镜预设
+    overlay_component.dart          时钟/标语/水印组件模型
+    screen_effect.dart              HLSL 叠加屏幕特效
+    screen_post_process_effect.dart native 后处理特效枚举
+    shader_preset.dart              Shader 沙盒 .shader 文件模型和默认模板
+  services/
+    dx11_shader_ffi.dart            DX11 native DLL 的 Dart FFI 封装
+    shader_filter_service.dart      shader 编译、渲染、native overlay、fallback 状态管理
+    settings_service.dart           SharedPreferences 配置服务
+    win32_helpers.dart              Win32 前台窗口/进程/鼠标工具
+    win32_polling_service.dart      按消费者启停的 Win32 状态轮询服务
+    console_hotkey_service.dart     全局控制台热键 Dart 侧服务
+    automation_preset_controller.dart 前台进程预设切换与恢复逻辑
+    tray_menu_layout.dart           托盘菜单纯数据布局
+    tray_filter_memory.dart         托盘滤镜关闭/恢复记忆
+    filter_overlay_logic.dart       覆盖层绘制与启动恢复纯逻辑
+    debounced_action.dart           单通道防抖动作
+    keyed_debounced_action.dart     按 key 防抖的设置持久化动作
+  ui/
+    console_panel.dart              主控制台面板
+    advanced/advanced_page.dart     高级功能页
+    sandbox/                        Shader 沙盒页面、编辑器和 uniform 控制
+    overlays/                       时钟、标语、水印、专注、聚光灯、区域遮罩 UI
+    color_picker/                   自定义颜色选择器
+    widgets/                        数值输入、位置选择等复用控件
+
+native/dx11_shader_engine/
+  include/shader_engine.h           C ABI 导出接口
+  src/shader_engine.cpp             DX11 设备、shader 编译、屏幕捕获、overlay、遮罩
+  CMakeLists.txt                    原生 DLL 构建配置
+
+windows/
+  CMakeLists.txt                    Flutter Windows runner 与 native DLL 集成
+  runner/flutter_window.*           Flutter host window 和全局热键 MethodChannel
+  runner/win32_window.*             DPI-aware Win32 窗口封装
+
+shaders/
+  filter.frag                       Flutter 侧基础 Fragment Shader
+
+test/
+  *_test.dart                       纯逻辑、服务、组件和 native 集成约束测试
+```
+
+## 5. 启动流程与状态恢复
+
+启动入口在 `main.dart`：
+
+1. `WidgetsFlutterBinding.ensureInitialized()` 和 `windowManager.ensureInitialized()` 初始化 Flutter 与窗口插件。
+2. `SettingsService.init()` 读取 `SharedPreferences`。
+3. 通过 `WindowOptions` 创建透明、置顶、隐藏标题栏、跳过任务栏的窗口。
+4. `waitUntilReadyToShow()` 中设置全屏、显示窗口并打开鼠标穿透。
+5. `ScreenFilterApp` 根据持久化字体构建主题，进入 `FilterOverlayPage`。
+
+`FilterOverlayPage.initState()` 会加载：
+
+- 基础滤镜：亮度、透明度、基础色、最近颜色、当前预设。
+- 顶层组件：时钟、标语、水印。
+- 高级功能：专注、聚光灯、区域遮罩、自动化规则、快捷键配置。
+- 最近 native 滤镜状态：`filter_last_native_overlay`。
+
+最近 native 滤镜恢复用于应用重启后恢复 DX11 overlay：
+
+1. 若存在 `PersistedNativeFilterState`，`shouldPrimeNativeRestoreOnStartup()` 使启动阶段进入恢复准备状态。
+2. 启动恢复期间会临时抑制基础 shader 和顶层组件，避免 Flutter 首帧与 native overlay 叠加闪烁。
+3. 对普通 HLSL 滤镜，先重新编译持久化的 `shaderCode`；对马赛克后处理，不要求存在用户 shader。
+4. `_clearFlutterSurfaceBeforeNativeRestore()` 先绘制透明 surface，再调用 `ShaderFilterService.applyFilter()`。
+5. 恢复成功后保持面板关闭并恢复鼠标穿透；恢复失败时打开控制台供用户处理，并清理无效 native 状态。
+
+`filter_last_native_overlay` 是运行时恢复状态，不属于 `AppConfig` 导入导出的用户配置快照。
+
+## 6. 窗口模型与覆盖层结构
+
+### 6.1 Windows Flutter 窗口
+
+Flutter 主窗口具备以下特性：
 
 - `backgroundColor: Colors.transparent`：透明窗口背景。
 - `skipTaskbar: true`：不出现在任务栏。
@@ -110,161 +153,186 @@ flowchart TD
 - `setFullScreen(true)`：覆盖整个屏幕。
 - `setIgnoreMouseEvents(true)`：默认鼠标穿透，不影响用户操作桌面。
 
-当控制面板打开时，`_togglePanel()` 会调用：
+当控制面板打开时，`_togglePanel()` 会关闭鼠标穿透；面板关闭时恢复鼠标穿透。
 
-- 打开面板：`setIgnoreMouseEvents(false)`，允许用户操作控制台和拖动组件。
-- 关闭面板：`setIgnoreMouseEvents(true)`，恢复鼠标穿透。
+### 6.2 Flutter 覆盖层顺序
 
-### 5.2 Flutter 覆盖层顺序
-
-`FilterOverlayPage.build()` 使用一个全屏 `Stack` 组织渲染层：
+`FilterOverlayPage.build()` 使用全屏 `Stack`：
 
 1. 滤镜层：
    - `RegionMaskClipper`
    - Flutter 基础 `FragmentShader`
-   - DX11 CPU fallback 的 `RawImage`
+   - DX11 fallback `RawImage`
 2. 专注模式覆盖层：`FocusModeOverlay`
 3. 聚光灯覆盖层：`SpotlightOverlay`
 4. 顶层组件：`ClockOverlay`、`SloganOverlay`、`WatermarkOverlay`
 5. 控制台：`ConsolePanel`
 6. 区域遮罩绘制层：`RegionMaskDrawingOverlay`
 
-注意：当 DX11 native overlay 可用时，动态 shader 滤镜会由原生 DirectComposition 透明覆盖窗口呈现；Flutter 中的 `RawImage` fallback 会保持为空。基础 Flutter 滤镜与专注/聚光灯/组件仍在 Flutter 主覆盖窗口中绘制。
+当 native overlay 活跃时，顶层组件会被隐藏，因为 native overlay 与 Flutter 主窗口是两条独立窗口/合成路径；控制台仍由 Flutter 主窗口绘制。
 
-## 6. 滤镜渲染管线
+## 7. 滤镜渲染管线
 
-项目有两条滤镜渲染路径：Flutter 基础滤镜路径和 DX11/HLSL 路径。
+项目有三类渲染路径：
 
-### 6.1 Flutter 基础滤镜路径
+- Flutter 基础滤镜路径。
+- DX11 用户 HLSL / HLSL 屏幕特效路径。
+- DX11 桌面截图后处理路径，目前包含马赛克。
+
+### 7.1 Flutter 基础滤镜路径
 
 基础滤镜使用 `shaders/filter.frag`：
 
-- uniform `uSize`：屏幕逻辑尺寸。
-- uniform `uBrightness`：亮度，负值变暗，正值变亮。
-- uniform `uAlpha`：整体透明度。
-- uniform `uBaseColor`：基础色。
+- `uSize`：屏幕逻辑尺寸。
+- `uBrightness`：亮度，负值变暗，正值变亮。
+- `uAlpha`：整体透明度。
+- `uBaseColor`：基础色。
 
-`main.dart` 中 `_buildShaderFilter()` 设置这些 uniform，并通过 `CustomPaint` 的 `ShaderPainter` 绘制全屏矩形。
+`main.dart` 中 `_buildShaderFilter()` 设置这些 uniform，并通过 `ShaderPainter` 绘制全屏矩形。
 
-当 `ShaderFilterService.mode != FilterApplyMode.none` 时，Flutter 基础 shader 层会直接返回空控件，避免和 DX11 动态滤镜重叠。
+`filter_overlay_logic.dart` 将基础 shader 是否绘制、是否清空透明 surface、native 恢复期间是否抑制图层抽成纯函数，方便测试启动恢复和关闭滤镜时的边界行为。
 
-### 6.2 DX11/HLSL 动态滤镜路径
+当 `ShaderFilterService.mode != FilterApplyMode.none` 时，Flutter 基础 shader 层通常跳过绘制，避免与 DX11 native overlay 或 fallback 叠加。
 
-DX11 路径由三部分组成：
+### 7.2 ShaderFilterService
 
-1. `ShaderFilterService`
-2. `DX11ShaderEngine` Dart FFI 封装
-3. `dx11_shader_engine.dll`
+`ShaderFilterService` 是 Dart 侧的 native 滤镜协调层，负责：
 
-#### 6.2.1 ShaderFilterService 职责
-
-`ShaderFilterService` 是 Dart 侧的状态协调层，负责：
-
-- 加载并初始化 native DX11 engine。
-- 编译 HLSL shader。
+- 加载并初始化 `DX11ShaderEngine`。
+- 分离编译 fullscreen shader 和 sandbox preview shader。
 - 管理渲染模式：`none`、`static`、`dynamic`。
-- 维护当前屏幕尺寸、DPI、鼠标位置、强调色。
-- 将透明度、亮度同步到 native compositor。
+- 记录滤镜来源：`none`、`sandbox`、`screenEffect`。
+- 管理后处理状态：`ScreenPostProcessEffect.none` / `mosaic`。
+- 维护屏幕逻辑尺寸、DPI、鼠标位置、强调色、透明度和亮度。
 - 将区域遮罩配置转换为物理像素坐标，并上传到 native。
-- 优先使用 native overlay；失败时回退到 CPU 读回 + Flutter `RawImage`。
+- 优先使用 native overlay，失败时回退到 CPU readback + Flutter `RawImage`。
 
-渲染尺寸通过 `filterRenderSize` 计算：
+渲染尺寸使用物理像素：
 
 ```text
 physicalWidth = round(logicalWidth * devicePixelRatio)
 physicalHeight = round(logicalHeight * devicePixelRatio)
 ```
 
-这样 DX11 渲染目标能匹配真实屏幕像素，避免高 DPI/4K 下滤镜发糊。
+这样 DX11 render target 能匹配真实屏幕像素，避免高 DPI/4K 下滤镜发糊。
 
-#### 6.2.2 渲染模式
+### 7.3 渲染模式与计时器
 
-| 模式 | 说明 |
+| 模式 | 行为 |
 | --- | --- |
-| `none` | 不渲染滤镜，隐藏 native overlay，清空 fallback 图像 |
+| `none` | 停止计时器、停止鼠标轮询、隐藏 native overlay、释放 fallback 图像 |
 | `static` | 渲染一帧并冻结 |
-| `dynamic` | 使用约 33ms 的 Timer 持续渲染，约 30 FPS |
+| `dynamic` | 使用约 33ms 的 Timer 连续渲染，约 30 FPS |
 
-Shader 沙盒页面会调用 `pauseOwnTimer()`，由沙盒自己推送帧；页面退出时再通过 `resumeOwnTimerIfNeeded()` 恢复 service 自身计时器。
+动态模式会通过 `Win32PollingService.retainCursorPolling()` 开启鼠标轮询；停止滤镜后释放该消费者。fallback 动态渲染另有 `fallbackFrameInterval`，默认约 66ms，用于降低 GPU readback 和 Flutter 图像上传压力。
 
-#### 6.2.3 native overlay 优先策略
+### 7.4 Native overlay 优先策略
 
 `applyFilter()` 会先尝试 `_tryStartNativeOverlay()`：
 
-1. 检查 DX11 engine 是否 ready、shader 是否已编译。
+1. 检查 DX11 engine 是否 ready，以及当前是否有可渲染内容：已编译用户 shader 或非 `none` 后处理。
 2. 计算物理像素尺寸。
 3. 调用 `engine_set_filter_visuals()` 同步透明度和亮度。
-4. 调用 `engine_set_region_mask()` 同步区域遮罩。
-5. 调用 `engine_show_overlay()` 创建/显示原生透明 overlay。
+4. 调用 `engine_set_post_process_effect()` 同步后处理状态。
+5. 调用 `engine_set_region_mask()` 同步区域遮罩。
+6. 调用 `engine_show_overlay()` 创建/显示原生透明 overlay。
 
-之后每帧调用 `engine_render_overlay_frame()`，由 native 直接渲染到 DirectComposition overlay。若 native overlay 渲染失败，则隐藏 overlay 并回退到：
+之后每帧调用 `engine_render_overlay_frame()`。若 native overlay 渲染失败，则隐藏 overlay 并回退到：
 
 1. `engine_render_frame()`
 2. `engine_get_frame_pixels()`
 3. Dart `decodeImageFromPixels()`
 4. Flutter `RawImage`
 
-这条 fallback 路径用于兼容或异常场景，但在 4K 动态滤镜下性能成本较高，因为它涉及 GPU -> CPU -> Flutter 图像上传。
+fallback 路径用于兼容或异常场景，但在高分辨率动态滤镜下成本较高。
 
-## 7. DX11 native shader engine
+### 7.5 HLSL sandbox 与屏幕采样
+
+Shader 沙盒有两条 native 编译路径：
+
+- `engine_compile_preview_shader()`：只替换 preview shader，不影响当前全屏滤镜。
+- `engine_compile_shader()`：替换 fullscreen shader，用于静态/动态全屏滤镜。
+
+native 会在用户代码前注入屏幕采样 helper：
+
+```hlsl
+float4 SampleScreen(float2 uv, float2 offsetPx)
+```
+
+`offsetPx` 会在 native 侧限制最大采样半径。为了避免用户 shader 绕过沙盒访问任意 texture/sampler/register，native 编译前会做文本级校验，拒绝 `Texture2D`、`SamplerState`、`register(t*)`、`.Sample()` 等直接资源访问写法。用户应通过 `SampleScreen(uv, offsetPx)` 读取屏幕纹理。
+
+屏幕纹理来源于 DXGI Output Duplication。native 会对 Flutter host window 和 native overlay 调用 `SetWindowDisplayAffinity(..., WDA_EXCLUDEFROMCAPTURE)`，避免截图纹理包含 ScreenFilter 自己，从而形成反馈循环。
+
+preview 使用独立 preview render target、preview staging texture 和 preview pixel shader；当 fullscreen overlay 最近已经捕获过屏幕纹理时，preview 可复用近期纹理，降低重复捕获成本。
+
+### 7.6 内置屏幕特效与马赛克
+
+`models/screen_effect.dart` 中的 HLSL 叠加特效包括：
+
+- 雪花
+- 星星
+- 萤火虫
+- 极光
+- 阳光
+
+这些特效走用户 HLSL shader 路径，会先编译对应 HLSL，再以 `FilterApplyOrigin.screenEffect` 应用动态滤镜。
+
+马赛克由 `ScreenPostProcessEffect.mosaic` 表示，不依赖用户 shader。Dart 侧调用：
+
+```dart
+applyFilter(
+  FilterApplyMode.dynamic,
+  screenSize,
+  accentColor,
+  postProcessEffect: ScreenPostProcessEffect.mosaic,
+  postProcessIntensity: 24.0,
+  origin: FilterApplyOrigin.screenEffect,
+)
+```
+
+native 侧通过 `engine_set_post_process_effect(1, intensity)` 选择内置 mosaic pixel shader。该 shader 采样桌面截图纹理，并以 `intensity` 作为块大小。
+
+## 8. DX11 native shader engine
 
 原生模块位于 `native/dx11_shader_engine`，编译为 `dx11_shader_engine.dll`，并通过 Windows CMake install 规则复制到 Flutter 可执行文件旁边。
 
-### 7.1 C ABI 导出接口
-
-`include/shader_engine.h` 暴露了稳定的 C ABI：
+### 8.1 C ABI 导出接口
 
 | 函数 | 作用 |
 | --- | --- |
-| `engine_init()` | 创建 DX11 device/context，编译全屏三角形 vertex shader 和 overlay composite shader |
-| `engine_compile_shader()` | 编译用户 HLSL pixel shader |
+| `engine_init()` | 创建 DX11 device/context，编译全屏三角形 vertex shader、overlay compositor、mosaic 和 downsample shader |
+| `engine_compile_shader()` | 编译用户 fullscreen HLSL pixel shader |
+| `engine_compile_preview_shader()` | 编译 sandbox preview HLSL pixel shader，不替换 fullscreen shader |
 | `engine_set_uniforms()` | 设置用户 shader uniform：时间、分辨率、鼠标、强调色 |
-| `engine_render_frame()` | 渲染用户 shader 到内部 render target |
-| `engine_get_frame_pixels()` | 从 staging texture 读取 RGBA 像素，供 Flutter fallback 使用 |
+| `engine_render_frame()` | 渲染 fullscreen 用户 shader 到内部 render target |
+| `engine_render_preview_frame()` | 渲染 preview shader 到独立 preview render target |
+| `engine_get_frame_pixels()` | 从最近渲染的 fullscreen 或 preview staging texture 读取 RGBA 像素 |
 | `engine_show_overlay()` | 创建/显示 native transparent overlay |
-| `engine_render_overlay_frame()` | 渲染用户 shader 并合成到 native overlay |
+| `engine_render_overlay_frame()` | 渲染用户 shader 或后处理，并合成到 native overlay |
 | `engine_set_filter_visuals()` | 设置 overlay compositor 的透明度和亮度 |
+| `engine_set_post_process_effect()` | 选择 native 后处理特效，目前 `0=none`、`1=mosaic` |
 | `engine_hide_overlay()` | 隐藏并释放 overlay 相关资源 |
 | `engine_is_overlay_active()` | 查询 native overlay 是否处于可见状态 |
 | `engine_set_region_mask()` | 上传区域遮罩多边形并生成 mask texture |
-| `engine_shutdown()` | 释放 DX11 与 overlay 资源 |
+| `engine_shutdown()` | 释放 DX11、overlay、屏幕捕获和 shader 资源 |
 
-Dart 侧 `DX11ShaderEngine` 必须与这些函数的签名严格一致。
+Dart 侧 `DX11ShaderEngine` 必须与这些函数签名严格一致。
 
-### 7.2 用户 HLSL shader 约定
+### 8.2 GPU 资源
 
-内置屏幕特效与沙盒 HLSL 使用统一 constant buffer：
+native engine 维护几组核心资源：
 
-```hlsl
-cbuffer Uniforms : register(b0) {
-    float  u_Time;
-    float3 _pad0;
-    float2 u_Resolution;
-    float2 u_Mouse;
-    float4 u_AccentColor;
-};
-```
+- fullscreen render target：用户 shader 或后处理输出。
+- fullscreen staging texture：CPU fallback readback。
+- preview render target / preview staging：沙盒预览专用，避免覆盖 fullscreen 状态。
+- screen texture / screen SRV：DXGI Output Duplication 捕获到的桌面帧。
+- sandbox screen texture：为用户 shader 采样准备的降采样屏幕纹理。
+- mask texture：区域遮罩的 R8 texture。
+- DirectComposition swapchain：native 透明 overlay 的最终输出。
 
-用户 shader 入口约定为：
+`engine_get_frame_pixels()` 根据 `g_lastFrameReadbackKind` 决定读取 fullscreen 还是 preview staging texture。
 
-```hlsl
-float4 main(PS_INPUT input) : SV_TARGET
-```
-
-native engine 使用全屏三角形绘制，不需要顶点缓冲。`SV_VertexID` 生成覆盖全屏的三个顶点，避免传统四边形带来的额外顶点和接缝问题。
-
-### 7.3 render target 与 fallback
-
-`CreateRenderTarget(width, height)` 创建：
-
-- `g_renderTarget`：`DXGI_FORMAT_R8G8B8A8_UNORM`，作为用户 shader 输出目标。
-- `g_rtv`：render target view。
-- `g_renderSrv`：shader resource view，供 overlay compositor 采样。
-- `g_staging`：CPU readback texture，供 `engine_get_frame_pixels()` 使用。
-
-当尺寸变化时，render target 会重建。
-
-### 7.4 native transparent overlay
+### 8.3 Native transparent overlay
 
 native overlay 使用独立 Win32 窗口 + DirectComposition：
 
@@ -277,23 +345,24 @@ native overlay 使用独立 Win32 窗口 + DirectComposition：
 - 窗口过程 `WM_NCHITTEST` 返回 `HTTRANSPARENT`，保证鼠标穿透。
 - 使用 `CreateSwapChainForComposition()` 创建 DirectComposition swapchain。
 - swapchain alpha mode 为 `DXGI_ALPHA_MODE_PREMULTIPLIED`。
+- overlay 在第一帧合成后再显示，减少空白/闪烁。
+- 找到 Flutter host window 后，overlay 会被放在 Flutter 窗口之后，避免遮住控制台。
+- overlay 会设置 `WDA_EXCLUDEFROMCAPTURE`，避免被 DXGI 捕获回自身纹理。
 
-overlay 会定位到当前 Flutter runner 主窗口所在区域，并在尺寸变化时重建 swapchain。
+### 8.4 Overlay composite shader
 
-### 7.5 overlay composite shader
+native 内置 compositor 负责最终合成：
 
-native 内置 `kCompositeShaderCode` 负责最终合成：
-
-1. 从 `userFrame : register(t0)` 采样用户 shader 输出。
+1. 从 `userFrame : register(t0)` 采样用户 shader 或后处理输出。
 2. 根据 `u_Brightness` 调整 RGB。
 3. 根据 `u_Opacity` 调整 alpha。
 4. 如果区域遮罩启用，从 `maskFrame : register(t1)` 采样 mask。
 5. 如启用反向遮罩，则使用 `1.0 - mask`。
-6. 将最终 RGB 乘以 alpha，以满足 DirectComposition premultiplied alpha 要求。
+6. 返回 premultiplied alpha 结果，满足 DirectComposition swapchain 要求。
 
-这样透明度、亮度和区域遮罩都可以在 GPU 合成阶段统一生效。
+透明度、亮度和区域遮罩都在 GPU 合成阶段统一生效。
 
-### 7.6 区域遮罩实现
+### 8.5 区域遮罩实现
 
 区域遮罩在 Dart 层存储为逻辑像素坐标：
 
@@ -322,35 +391,40 @@ native `engine_set_region_mask()` 会：
 5. 生成 `DXGI_FORMAT_R8_UNORM` immutable texture。
 6. 创建 `g_maskSrv`，供 composite shader 采样。
 
-这意味着遮罩栅格化是 CPU 操作，但只在遮罩配置、屏幕尺寸或 DPI 变化时发生；正常动态渲染帧仍由 GPU 采样 mask texture，避免每帧 CPU 裁剪。
+遮罩栅格化是 CPU 操作，但只在遮罩配置、屏幕尺寸或 DPI 变化时发生；正常动态帧仍由 GPU 采样 mask texture。
 
-## 8. 系统托盘
+## 9. 控制台、托盘与快捷键
 
-系统托盘由 `system_tray` 提供，入口在 `FilterOverlayPage.initSystemTray()`。
+### 9.1 ConsolePanel
 
-### 8.1 事件
+`ConsolePanel` 是主要 UI 控制台，侧边菜单包括：
 
-| 事件 | 行为 |
-| --- | --- |
-| 左键点击 | 打开/关闭控制面板 |
-| 右键点击 | 刷新并弹出右键菜单 |
+- 主页
+- 滤镜
+- 高级
+- 沙盒
+- 常规
+- 关于
 
-### 8.2 菜单布局
+它负责：
 
-菜单布局被抽到 `lib/services/tray_menu_layout.dart`，使用纯数据模型描述：
+- 基础滤镜参数调整、预设选择和最近颜色。
+- 顶层组件启用、拖动、设置。
+- HLSL 屏幕特效和马赛克后处理启停。
+- Shader 沙盒入口。
+- 高级页入口。
+- 字体、开机启动和退出操作。
 
-- `TrayMenuState`
-- `TrayMenuEntry`
-- `TrayMenuAction`
-- `TrayMenuEntryKind`
+### 9.2 系统托盘
 
-当前菜单结构：
+托盘布局由 `lib/services/tray_menu_layout.dart` 的纯数据模型描述：
 
 ```text
 显示/隐藏面板
 ---
 [ ] 滤镜
 [ ] 聚光灯
+[ ] 快捷键
 ---
 常用预设
   护眼
@@ -366,131 +440,96 @@ native `engine_set_region_mask()` 会：
 - UI/插件对象只作为最终适配层，避免测试依赖系统托盘插件。
 - 后续增加菜单项时，可以先改布局测试，再接实际行为。
 
-### 8.3 滤镜菜单行为
+`TrayFilterMemory` 负责托盘滤镜开关的恢复体验：
 
-`滤镜` 勾选状态由 `_filterEnabled` 决定：
+- 关闭基础滤镜前，记录基础色、透明度和亮度。
+- 关闭 native 滤镜前，记录模式、来源、强调色、透明度、亮度、shader code 或后处理状态。
+- 再次打开滤镜时，优先恢复最近 native 滤镜，其次恢复基础滤镜，否则应用“护眼”预设。
 
-- 基础滤镜启用：`alpha != 0` 或 `brightness != 0`。
-- DX11 shader 滤镜启用：`ShaderFilterService.mode != none`。
+### 9.3 全局控制台快捷键
 
-点击关闭滤镜时：
+快捷键配置模型为 `ConsoleHotkeyConfig`：
 
-- 若当前是基础滤镜，会记住当前基础色、透明度、亮度。
-- 若当前是 DX11 shader 滤镜，会调用 `stopFilter()`。
-- 清空基础滤镜参数。
+- `enabled`
+- `presetId`
 
-点击重新开启时：
+内置预设包括：
 
-- 如果有历史基础滤镜，恢复历史值。
-- 否则默认应用“护眼”预设。
+- `Ctrl + Alt + F`
+- `Ctrl + Alt + S`
+- `Ctrl + Shift + F`
+- `Alt + F12`
 
-### 8.4 聚光灯菜单行为
+Dart 侧 `ConsoleHotkeyService` 通过 MethodChannel `screen_filter_app/hotkey` 调用 runner：
 
-点击 `聚光灯` 会切换 `SpotlightConfig.enabled`。当聚光灯开启时，如果专注模式正在开启，会关闭专注模式，以保持两者互斥。
+- `registerHotkey`：传入 modifiers 和 keyCode。
+- `unregisterHotkey`：注销当前热键。
 
-## 9. 控制台与高级功能
+Windows runner 在 `flutter_window.cpp` 中调用 Win32 `RegisterHotKey()`，收到 `WM_HOTKEY` 后通过同一 channel 发送 `hotkeyPressed`，Dart 侧再调用 `_togglePanel()`。
 
-### 9.1 ConsolePanel
+## 10. 高级功能
 
-`ConsolePanel` 是主要 UI 控制台，接收来自 `main.dart` 的状态和回调。它负责：
+### 10.1 专注模式
 
-- 基础滤镜参数调整。
-- 预设选择。
-- 顶层组件启用、拖动、设置。
-- 屏幕特效快速启停。
-- 高级页入口。
-- 字体、开机启动等常规设置。
+`FocusModeOverlay` 基于前台窗口矩形绘制遮罩，让前台窗口区域保持可见，周围区域变暗。前台窗口矩形来自 `Win32PollingService.foregroundWindowRect`。
 
-屏幕特效由 `models/screen_effect.dart` 中的 `kScreenEffects` 提供，包括雪花、星星、萤火虫、极光、阳光等 HLSL 片段。选择特效时会：
+### 10.2 聚光灯
 
-1. 编译对应 HLSL。
-2. 清除基础预设高亮。
-3. 更新 DPR。
-4. 调用 `ShaderFilterService.applyFilter(FilterApplyMode.dynamic, ...)`。
+`SpotlightOverlay` 基于全局鼠标位置绘制圆形透明区域，其他区域变暗。鼠标位置来自 `Win32PollingService.cursorPosition`。
 
-### 9.2 ShaderSandboxPage
+聚光灯通过托盘也可快速启停。托盘开启聚光灯时，如果专注模式正在开启，会关闭专注模式，保持两者互斥。
 
-Shader 沙盒用于编辑和预览 HLSL：
+### 10.3 区域遮罩
 
-- 调用 `ShaderFilterService.compileShader()` 编译当前代码。
-- 可在预览区域通过 `renderFrame()` 读取像素并显示。
-- 应用为全屏滤镜时支持静态和动态模式。
-- native overlay 活跃时，沙盒会通过 `renderFullscreenFilterFrame()` 直接推送帧。
+区域遮罩支持绘制多个多边形区域，并支持反向模式：
 
-### 9.3 AdvancedPage
+- 非反向：滤镜仅作用于区域内。
+- 反向：滤镜作用于区域外。
 
-高级页管理：
+Flutter 基础滤镜通过 `RegionMaskClipper` 响应区域遮罩；DX11 native overlay 通过 `engine_set_region_mask()` 上传遮罩 texture。
 
-- 专注模式。
-- 聚光灯。
-- 区域遮罩绘制、启停、反向模式。
-- 自动化规则。
-- 配置导入导出。
+### 10.4 自动化规则
 
-配置导出使用 `AppConfig.toJson()`，配置导入使用 `AppConfig.fromJson()` 并同步到 `SettingsService` 与主页面状态。
+自动化规则按前台进程 exe 名称精确匹配。`AutomationPresetController` 会在首次命中前保存当前基础滤镜快照，命中规则时应用对应预设；当自动化关闭、规则为空或当前进程不再匹配时，恢复之前的基础滤镜。
 
-## 10. 配置与数据模型
+## 11. 配置与数据模型
 
-### 10.1 SettingsService
-
-配置服务基于 `SharedPreferences`，主要 key 分组如下：
+### 11.1 SettingsService keys
 
 | 分组 | key |
 | --- | --- |
 | 基础滤镜 | `filter_brightness`、`filter_alpha`、`filter_base_color`、`filter_active_preset`、`filter_recent_colors` |
+| Native 恢复 | `filter_last_native_overlay` |
 | 顶层组件 | `overlay_clock`、`overlay_slogan`、`overlay_watermark` |
 | 常规设置 | `general_startup`、`general_theme`、`general_font` |
-| 高级功能 | `advanced_focus_mode`、`advanced_spotlight`、`advanced_region_mask`、`advanced_automation_rules`、`advanced_automation_enabled` |
+| 高级功能 | `advanced_focus_mode`、`advanced_spotlight`、`advanced_region_mask`、`advanced_automation_rules`、`advanced_automation_enabled`、`advanced_console_hotkey` |
 
 复杂对象使用 `jsonEncode()` 存储为字符串。
 
-### 10.2 基础滤镜预设
+### 11.2 AppConfig
 
-`FilterPreset` 包含：
+`AppConfig` 是配置导入导出的快照，包含：
 
-- `name`
-- `description`
-- `icon`
-- `baseColor`
-- `alpha`
-- `brightness`
-- `tileColor`
+- 基础滤镜和最近颜色。
+- 字体、开机启动、主题偏好。
+- 自动化启用状态和规则。
+- 控制台快捷键配置。
+- 专注、聚光灯、区域遮罩配置。
 
-当前预设包括：清除、护眼、夜间、电影、电子书、低蓝光、暖色、冷色、复古、专注、红绿色弱、蓝黄色弱。
+`AppConfig.fromJson()` 对输入做保守解析：类型不匹配或解析失败时回退默认值，避免导入损坏配置导致应用崩溃。
 
-### 10.3 顶层组件模型
+### 11.3 ShaderPreset
 
-`OverlayComponent` 统一表示时钟、标语、水印：
+`.shader` 文件是 JSON 格式，包含：
 
-- `type`
-- `enabled`
-- `position`
-- `clockConfig`
-- `sloganConfig`
-- `watermarkConfig`
+- format/version。
+- metadata：名称、作者、描述、创建时间、标签。
+- shader：语言和 HLSL 代码。
+- uniforms：当前强调色。
 
-每种组件有独立配置：
+默认 shader 模板展示 `Uniforms` cbuffer 和 `SampleScreen(uv, offsetPx)` 的用法。
 
-- `ClockConfig`：数字/模拟样式、字体大小、颜色、秒数、24 小时制。
-- `SloganConfig`：文本、字体大小、颜色、字体、字重。
-- `WatermarkConfig`：图片路径、宽高、透明度。
-
-### 10.4 高级配置模型
-
-`advanced_config.dart` 定义：
-
-- `FocusModeConfig`
-- `SpotlightConfig`
-- `MaskRegion`
-- `RegionMaskConfig`
-- `AutomationRule`
-- `AppConfig`
-
-`AppConfig` 是导入导出的完整配置快照，包含基础滤镜、最近颜色、字体、开机启动、主题、高级配置与自动化规则。
-
-## 11. 自动化与 Win32 辅助
-
-自动化规则按前台进程名触发预设。
+## 12. Win32 轮询与自动化
 
 `win32_helpers.dart` 通过 FFI 调用：
 
@@ -502,17 +541,15 @@ Shader 沙盒用于编辑和预览 HLSL：
 - `CloseHandle`
 - `GetCursorPos`
 
-`_checkAutomationRules()` 每 2 秒检查一次前台进程：
+`Win32PollingService` 将这些采样封装成按消费者启停的 `ValueNotifier`：
 
-1. 若自动化未启用或规则为空，直接返回。
-2. 获取前台进程 exe 文件名。
-3. 与启用的 `AutomationRule.processName` 做小写匹配。
-4. 命中且与上次命中不同，则调用 `_applyPresetByName()`。
-5. 若没有规则命中，清空 `_lastMatchedPreset`，允许后续再次触发。
+- 鼠标位置：默认 16ms。
+- 前台窗口矩形：默认 50ms。
+- 前台进程名：默认 2s。
 
-## 12. 构建与产物
+只有存在消费者时才启动对应轮询。多个功能共享同一个服务，避免每个 overlay 或自动化逻辑各自开 Timer。
 
-### 12.1 依赖环境
+## 13. 构建与产物
 
 推荐环境：
 
@@ -521,19 +558,19 @@ Shader 沙盒用于编辑和预览 HLSL：
 - Visual Studio 2022，安装 Desktop development with C++。
 - Windows SDK。
 
-### 12.2 获取依赖
+获取依赖：
 
 ```powershell
 flutter pub get
 ```
 
-### 12.3 本地运行
+本地运行：
 
 ```powershell
 flutter run -d windows
 ```
 
-### 12.4 Release 构建
+Release 构建：
 
 ```powershell
 flutter build windows --release
@@ -544,8 +581,6 @@ flutter build windows --release
 ```text
 build/windows/x64/runner/Release/screen_filter_app.exe
 ```
-
-### 12.5 native DLL 集成
 
 `windows/CMakeLists.txt` 通过 `add_subdirectory()` 引入：
 
@@ -570,33 +605,21 @@ DynamicLibrary.open('$exeDir/dx11_shader_engine.dll');
 
 加载 native DLL。
 
-## 13. 测试
+## 14. 测试
 
-当前测试集中在可单测的业务边界：
+当前测试集中在可单测的业务边界和 native 集成约束：
 
-### 13.1 ShaderFilterService 测试
+- `shader_filter_service_test.dart`：物理像素尺寸、视觉参数 clamp、native overlay 重绘、区域遮罩上传、马赛克无需用户 shader、fallback 节流、fallback image 释放、sandbox preview/fullscreen 分离。
+- `tray_menu_layout_test.dart`：托盘菜单结构、状态反映、托盘滤镜记忆。
+- `filter_overlay_logic_test.dart`：基础 shader 绘制/清空、native 启动恢复、顶层组件与 native overlay 互斥。
+- `console_hotkey_service_test.dart`：MethodChannel 注册/注销热键参数。
+- `win32_polling_service_test.dart`：按消费者启停的 Win32 轮询。
+- `native_overlay_position_test.dart`：native overlay 定位、首次呈现后显示、捕获排除、preview 资源分离。
+- `native_shader_sandbox_test.dart`：`SampleScreen` 注入、sandbox 资源访问限制。
+- `settings_service_test.dart`：配置持久化、最近 native 滤镜状态、导入容错。
+- `advanced_page_test.dart`、`console_panel_screen_effect_test.dart`、`config_import_notifier_test.dart` 等组件与导入同步测试。
 
-`test/shader_filter_service_test.dart` 覆盖：
-
-- 全屏 shader 渲染尺寸使用物理像素。
-- 透明度和亮度被 clamp 到合法范围。
-- native overlay 活跃时，调整透明度/亮度会重绘 overlay，不走 CPU fallback。
-- 区域遮罩上传时：
-  - 逻辑坐标会按 DPR 转成物理像素。
-  - disabled 区域会被过滤。
-  - inverted 配置会传到 native。
-
-测试通过 fake `DX11ShaderEngine` 注入 `ShaderFilterService`，避免依赖真实 DX11 环境。
-
-### 13.2 托盘菜单布局测试
-
-`test/tray_menu_layout_test.dart` 覆盖：
-
-- 菜单分组顺序。
-- 常用预设子菜单内容。
-- 面板、滤镜、聚光灯状态反映到菜单 label/checkbox。
-
-### 13.3 推荐验证命令
+推荐验证命令：
 
 ```powershell
 flutter test
@@ -605,9 +628,9 @@ flutter build windows --release
 
 对 native/DX11 改动，至少应跑 Windows release 构建，因为它会编译 native DLL 并验证 CMake 集成。
 
-## 14. 扩展指南
+## 15. 扩展指南
 
-### 14.1 增加基础滤镜预设
+### 15.1 增加基础滤镜预设
 
 修改 `lib/models/filter_preset.dart`：
 
@@ -615,7 +638,7 @@ flutter build windows --release
 2. 设置 `baseColor`、`alpha`、`brightness`。
 3. 如需托盘常用入口，更新 `tray_menu_layout.dart` 和对应测试。
 
-### 14.2 增加内置屏幕特效
+### 15.2 增加 HLSL 叠加屏幕特效
 
 修改 `lib/models/screen_effect.dart`：
 
@@ -623,8 +646,20 @@ flutter build windows --release
 2. 保持 `main(PS_INPUT input) : SV_TARGET` 入口。
 3. 在 `kScreenEffects` 中新增 `ScreenEffect`。
 4. 确认 shader 使用的 uniform 不超出现有 `Uniforms` cbuffer。
+5. 为 `ConsolePanel` 中的启停/高亮行为补测试。
 
-### 14.3 增加 native FFI 接口
+### 15.3 增加 native 后处理特效
+
+新增 native 后处理需要同步：
+
+1. `lib/models/screen_post_process_effect.dart`：新增枚举值。
+2. `lib/services/dx11_shader_ffi.dart`：确保 effect index 与 native 约定一致。
+3. `native/dx11_shader_engine/include/shader_engine.h`：更新 `engine_set_post_process_effect()` 注释。
+4. `native/dx11_shader_engine/src/shader_engine.cpp`：编译新内置 shader，扩展 `engine_set_post_process_effect()` 和 `RenderPostProcessToTarget()`。
+5. `ConsolePanel`：增加入口、默认透明度/亮度和高亮状态。
+6. 测试：覆盖不依赖用户 shader 的启动路径、native effect index 和 UI 启停行为。
+
+### 15.4 增加 native FFI 接口
 
 新增 native 接口需要同步三处：
 
@@ -636,10 +671,10 @@ flutter build windows --release
 
 - C ABI 尽量只传基本类型、指针和长度。
 - Dart FFI 分配的 native memory 必须在 `finally` 中释放。
-- 结构体布局要满足 HLSL cbuffer 16 字节对齐。
+- HLSL cbuffer 结构体需要满足 16 字节对齐。
 - 修改 native 后必须跑 Windows build。
 
-### 14.4 扩展区域遮罩
+### 15.5 扩展区域遮罩
 
 当前遮罩是多边形 -> CPU 栅格化 -> R8 GPU texture。若要支持更多形状：
 
@@ -647,7 +682,7 @@ flutter build windows --release
 - native 层可以增加 rasterization 分支。
 - 若遮罩频繁动态变化，应考虑 GPU 生成 mask，避免每帧 CPU 栅格化。
 
-### 14.5 增加托盘菜单项
+### 15.6 增加托盘菜单项
 
 推荐流程：
 
@@ -658,31 +693,34 @@ flutter build windows --release
 
 托盘菜单应保持简洁，适合作为快捷入口；复杂配置继续放在 `ConsolePanel` 或 `AdvancedPage`。
 
-## 15. 性能要点
+## 16. 性能要点
 
 1. 4K/高 DPI 下，动态 shader 应优先走 native overlay。
-2. CPU fallback 会进行 GPU 读回和 Flutter 图像上传，只适合兼容/异常路径。
-3. 区域遮罩只在配置、尺寸或 DPI 变化时上传，正常帧只在 GPU 中采样。
-4. native overlay 使用 DirectComposition，减少 Flutter 合成压力。
-5. 动态模式 Timer 约 30 FPS；若未来需要更平滑动画，可考虑 vsync/高精度调度，但要评估功耗。
-6. `engine_set_filter_visuals()` 只更新 compositor uniform，不重新编译 shader。
-7. overlay swapchain 仅在尺寸变化时重建，避免打开控制台等场景频繁 SetWindowPos 或闪烁。
+2. CPU fallback 会进行 GPU readback 和 Flutter 图像上传，只适合兼容/异常路径。
+3. fallback 动态帧有节流，避免在 native overlay 不可用时过度占用 CPU/GPU。
+4. 区域遮罩只在配置、尺寸或 DPI 变化时上传，正常帧只在 GPU 中采样。
+5. DXGI Output Duplication 捕获桌面纹理时要避免捕获自身窗口，因此依赖 `WDA_EXCLUDEFROMCAPTURE`。
+6. native overlay 使用 DirectComposition，减少 Flutter 合成压力。
+7. 动态模式 Timer 约 30 FPS；若未来需要更平滑动画，可考虑 vsync/高精度调度，但要评估功耗。
+8. `engine_set_filter_visuals()` 只更新 compositor uniform，不重新编译 shader。
+9. overlay swapchain 仅在尺寸变化时重建，避免打开控制台等场景频繁重建窗口或闪烁。
 
-## 16. 已知边界与注意事项
+## 17. 已知边界与注意事项
 
 - 项目当前仅支持 Windows。
 - DX11 dynamic shader 使用 HLSL，不是 Flutter GLSL runtime effect。
 - Flutter 基础滤镜和 DX11 shader 滤镜不是同一条渲染链路；两者通过主状态互斥/协调。
 - native overlay 是独立透明窗口，聚光灯/专注模式等 Flutter 覆盖层仍由 Flutter 主窗口绘制。
+- 当 native overlay 活跃时，顶层组件会隐藏，以避免窗口层级冲突。
 - 若 native overlay 创建失败，系统会回退到 Flutter `RawImage` 路径，但高分辨率下性能较差。
 - 区域遮罩 native 化后可作用于 DX11 overlay；Flutter 基础滤镜仍通过 `RegionMaskClipper` 响应区域遮罩。
-- 自动化按 exe 文件名精确匹配，不做窗口标题或路径级匹配。
-- 开机启动相关逻辑通过 PowerShell/Windows 快捷方式处理，部署环境需要允许相关脚本命令执行。
+- 自动化按 exe 文件名精确匹配，不做窗口标题、路径或通配匹配。
+- 开机启动相关逻辑通过 HKCU Run 注册表项处理，部署环境需要允许相关 PowerShell/注册表操作。
 
-## 17. 维护建议
+## 18. 维护建议
 
-- 对 UI 状态/菜单结构这类逻辑，优先抽成纯 Dart 模型并写 Flutter test。
+- 对 UI 状态、托盘菜单、启动恢复这类逻辑，优先抽成纯 Dart 函数或模型并写 Flutter test。
 - 对 native 接口改动，保持 header、Dart typedef、实现三处同步。
-- 对性能相关改动，优先检查是否引入 GPU readback、CPU per-frame rasterization 或频繁重建窗口/swapchain。
-- 对配置模型改动，要同步导入导出 `AppConfig` 和 `SettingsService`。
+- 对性能相关改动，优先检查是否引入 GPU readback、CPU per-frame rasterization、频繁屏幕捕获或频繁重建 swapchain。
+- 对配置模型改动，要同步 `AppConfig`、`SettingsService`、导入通知和测试。
 - 对高 DPI 相关改动，确认逻辑像素和物理像素边界，尤其是鼠标坐标、区域遮罩和 render target 尺寸。
