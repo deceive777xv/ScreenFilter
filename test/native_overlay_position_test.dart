@@ -94,6 +94,35 @@ void main() {
     expect(excludeBody, contains('WDA_EXCLUDEFROMCAPTURE'));
   });
 
+  test('native preview reuses recent fullscreen screen texture', () {
+    final source = File(
+      'native/dx11_shader_engine/src/shader_engine.cpp',
+    ).readAsStringSync();
+    final renderUserShaderBody = _extractFunctionBody(
+      source,
+      'RenderUserShaderToTarget',
+    );
+    final previewBody = _extractFunctionBody(
+      source,
+      'engine_render_preview_frame',
+    );
+    final overlayBody = _extractFunctionBody(
+      source,
+      'engine_render_overlay_frame',
+    );
+    final releaseBody = _extractFunctionBody(source, 'ReleaseOverlayResources');
+
+    expect(source, contains('ScreenTextureUpdateMode'));
+    expect(source, contains('ShouldPreviewReuseActiveScreenTexture'));
+    expect(source, contains('g_lastOverlayRenderTick'));
+    expect(renderUserShaderBody, contains('ScreenTextureUpdateMode::ReuseLatest'));
+    expect(renderUserShaderBody, contains('PrepareSandboxScreenTexture'));
+    expect(previewBody, contains('ShouldPreviewReuseActiveScreenTexture'));
+    expect(previewBody, contains('ScreenTextureUpdateMode::ReuseLatest'));
+    expect(overlayBody, contains('g_lastOverlayRenderTick = GetTickCount64()'));
+    expect(releaseBody, contains('g_lastOverlayRenderTick = 0'));
+  });
+
   test('native preview rendering uses resources separate from fullscreen', () {
     final source = File(
       'native/dx11_shader_engine/src/shader_engine.cpp',

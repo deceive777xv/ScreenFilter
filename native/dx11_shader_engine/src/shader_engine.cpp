@@ -51,6 +51,11 @@ enum class FrameReadbackKind {
     Preview,
 };
 
+enum class ScreenTextureUpdateMode {
+    CaptureLatest,
+    ReuseLatest,
+};
+
 static FrameReadbackKind       g_lastFrameReadbackKind = FrameReadbackKind::None;
 
 static HWND                    g_overlayWindow = nullptr;
@@ -91,6 +96,7 @@ static HWND                    g_cachedFlutterWindow = nullptr;
 static HWND                    g_captureExcludedFlutterWindow = nullptr;
 static ULONGLONG               g_lastFlutterWindowSearchTick = 0;
 static ULONGLONG               g_lastOverlayPositionTick = 0;
+static ULONGLONG               g_lastOverlayRenderTick = 0;
 static float                   g_filterOpacity = 1.0f;
 static float                   g_filterBrightness = 0.0f;
 static int32_t                 g_postProcessEffect = 0;
@@ -106,6 +112,7 @@ static constexpr const wchar_t* kOverlayWindowClassName =
     L"SCREEN_FILTER_DX11_OVERLAY_WINDOW";
 static constexpr ULONGLONG kFlutterWindowSearchIntervalMs = 2000;
 static constexpr ULONGLONG kOverlayPositionIntervalMs = 100;
+static constexpr ULONGLONG kPreviewReuseOverlayCaptureMaxAgeMs = 120;
 
 // ── Constant buffer layout (must match the HLSL cbuffer) ────────────────────
 struct alignas(16) ShaderUniforms {
@@ -725,6 +732,7 @@ static void ReleaseOverlayResources() {
     g_cachedFlutterWindow = nullptr;
     g_lastFlutterWindowSearchTick = 0;
     g_lastOverlayPositionTick = 0;
+    g_lastOverlayRenderTick = 0;
 }
 
 static LRESULT CALLBACK OverlayWndProc(
@@ -1026,18 +1034,36 @@ static void ShowOverlayWindowAfterFirstFrame(int32_t width, int32_t height) {
     PositionOverlayWindow(width, height, true, true);
 }
 
+static bool ShouldPreviewReuseActiveScreenTexture() {
+    if (!g_overlayWindow || !IsWindowVisible(g_overlayWindow)) return false;
+    if (g_postProcessEffect != 0 || !g_pixelShader || !g_sandboxScreenSrv)
+        return false;
+    if (g_lastOverlayRenderTick == 0) return false;
+
+    const ULONGLONG now = GetTickCount64();
+    return now - g_lastOverlayRenderTick <=
+        kPreviewReuseOverlayCaptureMaxAgeMs;
+}
+
 static bool RenderUserShaderToTarget(
     ID3D11PixelShader* pixelShader,
     int32_t width,
     int32_t height,
-    ID3D11RenderTargetView* target
+    ID3D11RenderTargetView* target,
+    ScreenTextureUpdateMode screenTextureUpdateMode =
+        ScreenTextureUpdateMode::CaptureLatest
 ) {
     if (!g_context || !pixelShader || !g_vertexShader || !g_cbuffer ||
         !g_sampler || !g_screenTextureCbuffer || !target) {
         return false;
     }
 
-    PrepareSandboxScreenTexture();
+    if (screenTextureUpdateMode != ScreenTextureUpdateMode::ReuseLatest ||
+        !g_sandboxScreenSrv) {
+        if (!PrepareSandboxScreenTexture()) {
+            return false;
+        }
+    }
     if (!UpdateScreenTextureCbuffer()) {
         return false;
     }
@@ -1578,8 +1604,13 @@ SHADER_API int32_t engine_render_preview_frame(int32_t width, int32_t height) {
             return -1;
     }
 
+    const ScreenTextureUpdateMode screenTextureUpdateMode =
+        ShouldPreviewReuseActiveScreenTexture()
+            ? ScreenTextureUpdateMode::ReuseLatest
+            : ScreenTextureUpdateMode::CaptureLatest;
     const bool ok = RenderUserShaderToTarget(
-        g_previewPixelShader, width, height, g_previewRtv
+        g_previewPixelShader, width, height, g_previewRtv,
+        screenTextureUpdateMode
     );
     if (ok) {
         g_lastFrameReadbackKind = FrameReadbackKind::Preview;
@@ -1621,7 +1652,10 @@ SHADER_API int32_t engine_render_overlay_frame(int32_t width, int32_t height) {
     }
     g_lastFrameReadbackKind = FrameReadbackKind::Fullscreen;
 
-    return RenderCompositeToOverlay(width, height) ? 0 : -1;
+    if (!RenderCompositeToOverlay(width, height))
+        return -1;
+    g_lastOverlayRenderTick = GetTickCount64();
+    return 0;
 }
 
 SHADER_API void engine_set_filter_visuals(float opacity, float brightness) {
