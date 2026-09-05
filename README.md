@@ -87,6 +87,11 @@ build/windows/x64/runner/Release/screen_filter_app.exe
 
 Windows CMake 会同时构建 `native/dx11_shader_engine`，并把 `dx11_shader_engine.dll` 复制到可执行文件旁边。Dart FFI 运行时会从 `Platform.resolvedExecutable` 所在目录加载这个 DLL。
 
+用 Inno Setup 打开 `installer.iss`，点击 Compile，生成安装程序:
+```text
+dist\ScreenFilter-Setup-1.0.0.exe
+```
+
 ## 维护说明
 
 - 更完整的架构、渲染管线、native ABI、配置模型和扩展指南见 [docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md)。
